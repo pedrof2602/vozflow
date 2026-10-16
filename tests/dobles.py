@@ -1,8 +1,20 @@
 """Dobles de prueba compartidos por varias baterías."""
 
+import contextlib
+import os
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
+from evdev import InputEvent, ecodes
+
+from vozflow.atajos.puerto import (
+    AccionDeAtajo,
+    AtajoOcupado,
+    Despachador,
+    EventoDeAtajo,
+    FaseDeAtajo,
+)
 from vozflow.audio.senal import Audio
 from vozflow.transcripcion.motor import ErrorDeTranscripcion, Transcripcion, validar_audio
 
@@ -52,3 +64,123 @@ class MotorFalso:
 
     def descargar(self) -> None:
         self.cargado = False
+
+
+class EscuchaFalsa:
+    """``EscuchaDeAtajos`` que no toca el sistema: la persona se simula con ``pulsar``/``soltar``."""
+
+    def __init__(self) -> None:
+        self._despachador: Despachador | None = None
+        self._ocupados: set[str] = set()
+
+    def ocupar(self, atajo: str) -> None:
+        """Hace que otra función del escritorio ya use esta combinación."""
+        self._ocupados.add(atajo)
+
+    def iniciar(
+        self, atajos: Mapping[AccionDeAtajo, str], al_evento: Callable[[EventoDeAtajo], None]
+    ) -> None:
+        if self._despachador is not None and self._despachador.activo:
+            raise RuntimeError("La escucha ya está iniciada")
+        for atajo in atajos.values():
+            if atajo in self._ocupados:
+                raise AtajoOcupado(f"{atajo} ya lo usa otra función del escritorio")
+        self._despachador = Despachador(al_evento)
+
+    def detener(self) -> None:
+        if self._despachador is not None:
+            self._despachador.detener()
+
+    def pulsar(self, accion: AccionDeAtajo) -> None:
+        if self._despachador is not None:
+            self._despachador.emitir(accion, FaseDeAtajo.PULSADO)
+
+    def soltar(self, accion: AccionDeAtajo) -> None:
+        if self._despachador is not None:
+            self._despachador.emitir(accion, FaseDeAtajo.SOLTADO)
+
+
+class TecladoFalso:
+    """Un teclado que se puede ``select``ar: cada ``enviar`` escribe un byte en una tubería."""
+
+    def __init__(self, ruta: str, nombre: str) -> None:
+        self.ruta = ruta
+        self.nombre = nombre
+        self._lectura, self._escritura = os.pipe()
+        self.fd = self._lectura
+        self.eventos: list[InputEvent] = []
+        self.cerrado = False
+        self.desconectado = False
+
+    def teclas(self) -> set[int]:
+        return {ecodes.KEY_A, ecodes.KEY_LEFTCTRL, ecodes.KEY_SPACE}
+
+    def enviar(self, *teclas: tuple[int, int]) -> None:
+        for codigo, valor in teclas:
+            self.eventos.append(InputEvent(0, 0, ecodes.EV_KEY, codigo, valor))
+        os.write(self._escritura, b"x")
+
+    def leer(self) -> list[InputEvent]:
+        if self.desconectado:
+            raise OSError(19, "No such device")
+        os.read(self._lectura, 4096)
+        pendientes, self.eventos = self.eventos, []
+        return pendientes
+
+    def cerrar(self) -> None:
+        self.cerrado = True
+
+    def grab(self) -> None:  # nunca debe llamarse: no se toma el teclado en exclusivo
+        raise AssertionError("No se debe tomar el teclado en exclusivo (EVIOCGRAB)")
+
+    def destruir(self) -> None:
+        for descriptor in (self._lectura, self._escritura):
+            with contextlib.suppress(OSError):
+                os.close(descriptor)
+
+
+class Reloj:
+    def __init__(self) -> None:
+        self.ahora = 0.0
+
+    def __call__(self) -> float:
+        return self.ahora
+
+
+class GSettingsFalso:
+    """Imita el comando ``gsettings`` con estado: ``get``, ``set``, ``reset-recursively`` y
+    ``list-recursively``. Los valores se guardan en el texto GVariant que imprime la herramienta."""
+
+    def __init__(self) -> None:
+        self.valores: dict[tuple[str, str], str] = {}
+        self.llamadas: list[tuple[str, ...]] = []
+        self.fallar_con: Exception | None = None
+
+    def precargar(self, esquema: str, clave: str, valor: str) -> None:
+        self.valores[(esquema, clave)] = valor
+
+    def __call__(self, argumentos: Sequence[str]) -> str:
+        self.llamadas.append(tuple(argumentos))
+        if self.fallar_con is not None:
+            raise self.fallar_con
+        orden, *resto = argumentos
+        if orden == "get":
+            esquema, clave = resto
+            return self.valores.get((esquema, clave), self._por_defecto(clave)) + "\n"
+        if orden == "set":
+            esquema, clave, valor = resto
+            self.valores[(esquema, clave)] = valor if valor.startswith(("[", "@")) else repr(valor)
+            return ""
+        if orden == "reset-recursively":
+            (esquema,) = resto
+            for llave in [k for k in self.valores if k[0] == esquema]:
+                del self.valores[llave]
+            return ""
+        if orden == "list-recursively":
+            (esquema,) = resto
+            return "".join(f"{e} {c} {v}\n" for (e, c), v in self.valores.items() if e == esquema)
+        raise AssertionError(f"Orden de gsettings no prevista: {argumentos}")
+
+    @staticmethod
+    def _por_defecto(clave: str) -> str:
+        return "@as []" if clave == "custom-keybindings" else "''"

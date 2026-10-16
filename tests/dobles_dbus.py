@@ -5,6 +5,7 @@ llega a quien ya estaba suscrito cuando se emitió, así que suscribirse *despu�
 método pierde la respuesta.
 """
 
+import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
@@ -14,7 +15,9 @@ from jeepney import (
     HeaderFields,
     MatchRule,
     Message,
+    MessageFlag,
     new_error,
+    new_method_call,
     new_method_return,
     new_signal,
 )
@@ -129,3 +132,42 @@ class ConexionPortalFalsa:
         self.emitir(
             ruta, "org.freedesktop.portal.Request", "Response", "ua{sv}", (codigo, resultados)
         )
+
+
+class ConexionServidorFalsa:
+    unique_name = ":1.99"
+
+    def __init__(self, codigo_del_nombre: int = 1) -> None:
+        self.codigo_del_nombre = codigo_del_nombre
+        self.entrantes: deque[Message] = deque()
+        self.enviados: list[Message] = []
+        self.peticiones: list[Message] = []
+        self.cerrada = False
+
+    def send_and_get_reply(self, mensaje: Message, *, timeout: float | None = None) -> Message:
+        self.peticiones.append(mensaje)
+        return new_method_return(mensaje, "u", (self.codigo_del_nombre,))
+
+    def receive(self, *, timeout: float | None = None) -> Message:
+        if self.entrantes:
+            return self.entrantes.popleft()
+        time.sleep(0.01)
+        raise TimeoutError
+
+    def send(self, mensaje: Message, serial: int | None = None) -> None:
+        self.enviados.append(mensaje)
+
+    def close(self) -> None:
+        self.cerrada = True
+
+
+def llamada_toggle(sin_respuesta: bool = False) -> Message:
+    """Lo que manda ``dbus-send`` cuando GNOME detecta el atajo."""
+    from vozflow.servicio_dbus import INTERFAZ, NOMBRE_DEL_SERVICIO, RUTA
+
+    mensaje = new_method_call(
+        DBusAddress(RUTA, bus_name=NOMBRE_DEL_SERVICIO, interface=INTERFAZ), "Toggle"
+    )
+    if sin_respuesta:
+        mensaje.header.flags = MessageFlag.no_reply_expected
+    return mensaje
