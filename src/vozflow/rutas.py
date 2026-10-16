@@ -14,6 +14,11 @@ def _directorio_xdg(variable: str, por_defecto: tuple[str, ...]) -> Path:
     return Path.home().joinpath(*por_defecto)
 
 
+def directorio_de_aplicaciones() -> Path:
+    """Donde el escritorio busca las entradas ``.desktop`` del usuario."""
+    return _directorio_xdg("XDG_DATA_HOME", (".local", "share")) / "applications"
+
+
 def directorio_datos() -> Path:
     return _directorio_xdg("XDG_DATA_HOME", (".local", "share")) / _NOMBRE
 
