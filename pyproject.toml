@@ -6,7 +6,16 @@ authors = [
     { name = "pedrof2602", email = "86478923+pedrof2602@users.noreply.github.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "evdev>=2.0.0",
+    "faster-whisper>=1.2.1",
+    "httpx>=0.28.1",
+    "jeepney>=0.9.0",
+    "keyring>=25.7.0",
+    "numpy>=2.5.4",
+    "pyside6>=6.12.0",
+    "sounddevice>=0.5.6",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.19,<0.13.0"]
@@ -14,9 +23,11 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.170.1",
     "mypy>=2.4.0",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "pytest-qt>=4.5.0",
     "ruff>=0.17.1",
 ]
 
@@ -33,3 +44,12 @@ python_version = "3.14"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not lento and not manual'"
+markers = [
+    "lento: usa el modelo real de transcripción; se corre a mano con -m lento",
+    "manual: necesita el escritorio o el hardware; se corre a mano con -m manual",
+]
+
+[[tool.mypy.overrides]]
+module = ["sounddevice", "evdev", "faster_whisper", "jeepney", "jeepney.*", "keyring", "keyring.*"]
+ignore_missing_imports = true
