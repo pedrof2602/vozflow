@@ -3,24 +3,31 @@
 import argparse
 import logging
 import signal
+import sqlite3
 import sys
 import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from vozflow.ajustes_por_defecto import Ajustes
+from vozflow import cli
 from vozflow.aplicacion import Aplicacion, Grabadora, dictar_una_vez
 from vozflow.atajos.compuesta import NingunAdaptadorSirve
 from vozflow.atajos.evdev import SinPermisoDeTeclado, SinTeclados
 from vozflow.atajos.gsettings import ErrorDeGSettings
 from vozflow.atajos.puerto import AtajoOcupado, EscuchaDeAtajos
 from vozflow.audio.captura import ErrorDeAudio
+from vozflow.configuracion import ConfiguracionDeBase
 from vozflow.diagnostico import Comprobacion, ejecutar_diagnostico, formatear, sondas_reales
+from vozflow.dominio.copia import CopiaInvalida
 from vozflow.dominio.dictado import EstadoDelDictado
 from vozflow.dominio.tuberia import OpcionesDeTuberia
 from vozflow.insercion.puerto import Insertor
 from vozflow.medicion import FRASES_DE_PRUEBA, ejecutar_medicion
+from vozflow.persistencia.ajustes import AjustesRepo
+from vozflow.persistencia.base import abrir_base
+from vozflow.persistencia.errores import DatoInvalido
+from vozflow.persistencia.historial import HistorialRepo
 from vozflow.registro import configurar_registro
 from vozflow.servicio_dbus import InstanciaYaEnEjecucion
 from vozflow.transcripcion.faster_whisper import MODELO_POR_DEFECTO
@@ -42,6 +49,7 @@ class Dependencias:
     crear_motor: Callable[[str], MotorDeTranscripcion]
     esperar: Callable[[float], None]
     descargar_modelo: Callable[[str], str]
+    abrir_base: Callable[[], sqlite3.Connection] = abrir_base
     entrada: Callable[[str], str] = input
     salida: Callable[[str], None] = print
 
@@ -66,6 +74,8 @@ class DependenciasDelServicio:
     crear_escucha: Callable[[], EscuchaDeAtajos]
     crear_ventana: Callable[[], VentanaActiva]
     crear_insertor: Callable[[], Insertor]
+    crear_motor: Callable[[str, int], MotorDeTranscripcion]
+    """Recibe el modelo y la cantidad de hilos de los ajustes."""
     esperar_cierre: Callable[[], None]
 
 
@@ -80,12 +90,14 @@ def _esperar_senal() -> None:
 def servicio_real() -> DependenciasDelServicio:
     from vozflow.atajos import crear_escucha
     from vozflow.insercion import crear_insertor
+    from vozflow.transcripcion.faster_whisper import MotorFasterWhisper
     from vozflow.ventana.atspi import VentanaActivaAtspi
 
     return DependenciasDelServicio(
         crear_escucha=crear_escucha,
         crear_ventana=VentanaActivaAtspi,
         crear_insertor=crear_insertor,
+        crear_motor=lambda modelo, hilos: MotorFasterWhisper(modelo=modelo, hilos=hilos),
         esperar_cierre=_esperar_senal,
     )
 
@@ -127,7 +139,7 @@ def _crear_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--alternar", help="atajo para empezar y terminar (por defecto <Control><Alt>space)"
     )
-    parser.add_argument("--modelo", default=MODELO_POR_DEFECTO)
+    parser.add_argument("--modelo", help="modelo de transcripción (por defecto, el de los ajustes)")
     parser.add_argument(
         "--dispositivo", type=_dispositivo, help="micrófono: índice o parte del nombre"
     )
@@ -169,6 +181,8 @@ def _crear_parser() -> argparse.ArgumentParser:
         "descargar-modelo", help="descarga el modelo de transcripción (única vez que usa internet)"
     )
     descarga.add_argument("--modelo", default=MODELO_POR_DEFECTO)
+
+    cli.registrar(ordenes)
 
     ordenes.add_parser(
         "diagnostico", help="revisa qué tiene este escritorio para atajos e inserción de texto"
@@ -239,6 +253,14 @@ def _hacer_diagnostico() -> list[Comprobacion]:
     return ejecutar_diagnostico(sondas_reales())
 
 
+def _orden_de_datos(argumentos: argparse.Namespace, dependencias: Dependencias) -> int:
+    base = dependencias.abrir_base()
+    try:
+        return cli.ejecutar(argumentos, base, dependencias.salida)
+    finally:
+        base.close()
+
+
 def _orden_diagnostico() -> int:
     print(formatear(_hacer_diagnostico()))
     return CODIGO_OK
@@ -256,31 +278,40 @@ _TEXTO_DEL_ESTADO = {
 def _orden_servicio(
     argumentos: argparse.Namespace, dependencias: Dependencias, servicio: DependenciasDelServicio
 ) -> int:
-    ajustes = Ajustes(modelo=argumentos.modelo).con_atajos(argumentos.mantener, argumentos.alternar)
-    aplicacion = Aplicacion(
-        escucha=servicio.crear_escucha(),
-        grabadora=dependencias.crear_grabadora(),
-        motor=dependencias.crear_motor(ajustes.modelo),
-        ventana=servicio.crear_ventana(),
-        insertor=servicio.crear_insertor(),
-        atajos=ajustes.atajos(),
-        al_cambiar_estado=lambda estado: _avisar(_TEXTO_DEL_ESTADO[estado]),
-        al_aviso=lambda mensaje: _avisar(f"Aviso: {mensaje}"),
-        # Lo dictado se muestra solo si no se pudo insertar, para que no se pierda.
-        al_texto_sin_insertar=lambda texto: _avisar(f"Texto sin insertar: {texto}"),
-    )
+    base = dependencias.abrir_base()
     try:
-        _avisar("Cargando el modelo…")
-        aplicacion.iniciar()
-        _avisar(
-            f"vozflow listo. Mantené {ajustes.atajo_mantener} para dictar, o pulsá "
-            f"{ajustes.atajo_alternar} para empezar y terminar. Ctrl+C para salir."
+        repo = AjustesRepo(base)
+        ajustes = repo.cargar().con_atajos(argumentos.mantener, argumentos.alternar)
+        aplicacion = Aplicacion(
+            escucha=servicio.crear_escucha(),
+            grabadora=dependencias.crear_grabadora(),
+            motor=servicio.crear_motor(argumentos.modelo or ajustes.modelo, ajustes.hilos),
+            ventana=servicio.crear_ventana(),
+            insertor=servicio.crear_insertor(),
+            atajos=ajustes.atajos(),
+            idioma=ajustes.idioma,
+            dispositivo=argumentos.dispositivo or ajustes.dispositivo,
+            configuracion=ConfiguracionDeBase(base),
+            historial=HistorialRepo(base, activo=lambda: bool(repo.obtener("historial.activo"))),
+            al_cambiar_estado=lambda estado: _avisar(_TEXTO_DEL_ESTADO[estado]),
+            al_aviso=lambda mensaje: _avisar(f"Aviso: {mensaje}"),
+            # Lo dictado se muestra solo si no se pudo insertar, para que no se pierda.
+            al_texto_sin_insertar=lambda texto: _avisar(f"Texto sin insertar: {texto}"),
         )
-        servicio.esperar_cierre()
-    except KeyboardInterrupt:
-        pass  # Ctrl+C es la forma normal de apagarlo
+        try:
+            _avisar("Cargando el modelo…")
+            aplicacion.iniciar()
+            _avisar(
+                f"vozflow listo. Mantené {ajustes.atajo_mantener} para dictar, o pulsá "
+                f"{ajustes.atajo_alternar} para empezar y terminar. Ctrl+C para salir."
+            )
+            servicio.esperar_cierre()
+        except KeyboardInterrupt:
+            pass  # Ctrl+C es la forma normal de apagarlo
+        finally:
+            aplicacion.detener()
     finally:
-        aplicacion.detener()
+        base.close()
     _avisar("vozflow se apagó.")
     return CODIGO_OK
 
@@ -304,8 +335,13 @@ def main(
             return _orden_descargar_modelo(argumentos, dependencias)
         if argumentos.orden == "diagnostico":
             return _orden_diagnostico()
+        if argumentos.orden in cli.ORDENES_DE_DATOS:
+            return _orden_de_datos(argumentos, dependencias)
         return _orden_servicio(argumentos, dependencias, servicio or servicio_real())
     except (
+        cli.ErrorDeComando,
+        DatoInvalido,
+        CopiaInvalida,
         ErrorDeAudio,
         ErrorDeTranscripcion,
         AtajoOcupado,

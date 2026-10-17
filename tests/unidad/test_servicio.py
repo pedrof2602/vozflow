@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
@@ -15,9 +16,19 @@ from vozflow.__main__ import (
 )
 from vozflow.atajos.puerto import AccionDeAtajo
 from vozflow.insercion.puerto import ResultadoInsercion
+from vozflow.persistencia.ajustes import AjustesRepo
+from vozflow.persistencia.base import abrir_base
+from vozflow.persistencia.diccionario_repo import DiccionarioRepo
+from vozflow.persistencia.historial import HistorialRepo
 from vozflow.servicio_dbus import InstanciaYaEnEjecucion
 
 M, A = AccionDeAtajo.MANTENER, AccionDeAtajo.ALTERNAR
+_DIRECTORIO: list[Path] = [Path()]
+
+
+@pytest.fixture(autouse=True)
+def _directorio_de_la_base(tmp_path: Path) -> None:
+    _DIRECTORIO[0] = tmp_path
 
 
 class Montaje:
@@ -40,13 +51,23 @@ class Montaje:
             crear_motor=lambda modelo: self.motor,
             esperar=lambda s: None,
             descargar_modelo=lambda m: "",
+            abrir_base=lambda: abrir_base(self.ruta),
         )
+        # Un archivo de verdad: el servicio abre su propia conexión y la cierra al apagarse.
+        self.ruta = _DIRECTORIO[0] / "vozflow.db"
+        self.base = abrir_base(self.ruta)
+        self.modelo_pedido: tuple[str, int] | None = None
         self.servicio = DependenciasDelServicio(
             crear_escucha=lambda: self.escucha,
             crear_ventana=VentanaFalsa,
             crear_insertor=lambda: self.insertor,
+            crear_motor=self._crear_motor,
             esperar_cierre=self._esperar_cierre,
         )
+
+    def _crear_motor(self, modelo: str, hilos: int) -> MotorFalso:
+        self.modelo_pedido = (modelo, hilos)
+        return self.motor
 
     def _esperar_cierre(self) -> None:
         if self._cierre is not None:
@@ -166,3 +187,66 @@ def test_el_subcomando_diagnostico_imprime_el_informe(
     codigo = Montaje().correr("diagnostico")
 
     assert codigo == CODIGO_OK and "✓ Algo: bien" in capsys.readouterr().out
+
+
+# ---- los ajustes, el diccionario y el historial salen de la base ----------------------------------------------
+
+
+def test_los_atajos_y_el_motor_salen_de_los_ajustes_guardados() -> None:
+    m = Montaje()
+    ajustes = AjustesRepo(m.base)
+    ajustes.establecer("atajo.mantener", "F9")
+    ajustes.establecer("motor.modelo", "medium")
+    ajustes.establecer("motor.hilos", 6)
+
+    m.correr()
+
+    assert m.atajos_pedidos[M] == "F9" and m.atajos_pedidos[A] == "<Control><Alt>space"
+    assert m.modelo_pedido == ("medium", 6)
+
+
+def test_la_linea_de_comandos_manda_sobre_los_ajustes_sin_cambiarlos() -> None:
+    m = Montaje()
+    ajustes = AjustesRepo(m.base)
+    ajustes.establecer("atajo.mantener", "F9")
+
+    m.correr("--mantener", "F10", "--modelo", "base")
+
+    assert m.atajos_pedidos[M] == "F10" and m.modelo_pedido == ("base", 4)
+    assert AjustesRepo(abrir_base(m.ruta)).obtener("atajo.mantener") == "F9"
+
+
+def test_el_diccionario_de_la_base_llega_al_motor() -> None:
+    m = Montaje(cierre=_dictar)
+    DiccionarioRepo(m.base).agregar("SQLAlchemy")
+
+    m.correr()
+
+    assert m.motor.llamadas[0].pista == "SQLAlchemy"
+
+
+def test_cada_dictado_queda_en_el_historial() -> None:
+    m = Montaje(cierre=_dictar)
+
+    m.correr()
+
+    (dictado,) = HistorialRepo(abrir_base(m.ruta)).listar()
+    assert dictado.estado == "insertado" and dictado.texto_crudo == "mi contraseña secreta"
+
+
+def test_con_el_historial_apagado_en_los_ajustes_no_se_guarda() -> None:
+    m = Montaje(cierre=_dictar)
+    AjustesRepo(m.base).establecer("historial.activo", False)
+
+    m.correr()
+
+    assert HistorialRepo(abrir_base(m.ruta)).contar() == 0 and len(m.insertor.insertados) == 1
+
+
+def test_el_idioma_fijado_en_los_ajustes_llega_al_motor() -> None:
+    m = Montaje(cierre=_dictar)
+    AjustesRepo(m.base).establecer("idioma.modo", "en")
+
+    m.correr()
+
+    assert m.motor.llamadas[0].idioma == "en"

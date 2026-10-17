@@ -17,6 +17,7 @@ from vozflow.audio.captura import ErrorDeAudio
 from vozflow.audio.senal import FRECUENCIA
 from vozflow.configuracion import ConfiguracionEstatica, FuenteDeConfiguracion
 from vozflow.dominio.dictado import EstadoDelDictado, EstadoDictado, Evento
+from vozflow.dominio.historial import EstadoDelHistorial
 from vozflow.dominio.tuberia import (
     OPCIONES_POR_DEFECTO,
     OpcionesDeTuberia,
@@ -185,6 +186,23 @@ _EVENTOS = {
 }
 
 
+class RegistroDeDictados(Protocol):
+    """Donde queda el historial; ``HistorialRepo`` lo cumple. Con el historial apagado no guarda."""
+
+    def guardar(
+        self,
+        *,
+        texto_crudo: str,
+        texto_final: str,
+        duracion_audio_ms: int,
+        duracion_proceso_ms: int,
+        estado: EstadoDelHistorial,
+        idioma: str = "",
+        aplicacion: str = "",
+        modo_id: int | None = None,
+    ) -> object: ...
+
+
 class Aplicacion:
     """Del atajo al texto insertado. Cada dictado corre en su propio hilo; los atajos llegan desde
     el hilo de la escucha y solo cambian el estado, sin bloquearse.
@@ -201,7 +219,10 @@ class Aplicacion:
         ventana: VentanaActiva,
         insertor: Insertor,
         atajos: Mapping[AccionDeAtajo, str],
+        idioma: str | None = None,
+        dispositivo: str | int | None = None,
         configuracion: FuenteDeConfiguracion | None = None,
+        historial: RegistroDeDictados | None = None,
         al_cambiar_estado: Callable[[EstadoDelDictado], None] | None = None,
         al_aviso: Callable[[str], None] | None = None,
         al_texto_sin_insertar: Callable[[str], None] | None = None,
@@ -213,6 +234,11 @@ class Aplicacion:
         self._insertor = insertor
         self._atajos = dict(atajos)
         self._configuracion = configuracion or ConfiguracionEstatica()
+        self._historial = historial
+        self._idioma = idioma
+        self._dispositivo = dispositivo
+        self._soltado_s = 0.0
+        self._guardado = False
         self._al_cambiar_estado = al_cambiar_estado
         self._al_aviso = al_aviso
         self._al_texto_sin_insertar = al_texto_sin_insertar
@@ -268,6 +294,7 @@ class Aplicacion:
             if self._dictado.estado is EstadoDelDictado.ESCUCHANDO:
                 self._empezar(por_mantener=traducido is Evento.PULSAR)
             elif escuchando:
+                self._soltado_s = time.perf_counter()
                 self._fin_de_grabacion.set()
 
     def _empezar(self, *, por_mantener: bool) -> None:
@@ -294,17 +321,24 @@ class Aplicacion:
     # ---- un dictado --------------------------------------------------------------------------
 
     def _dictar(self) -> None:
+        self._guardado = False
+        resultado: ResultadoDictado | None = None
         try:
             resultado = dictar_hasta(
                 grabadora=self._grabadora,
                 motor=self._motor,
                 seguir=lambda: not self._fin_de_grabacion.is_set(),
                 pista=self._leer_pista(),
+                idioma=self._idioma,
+                dispositivo=self._dispositivo,
                 esperar=self._esperar_el_fin,
                 al_empezar=self._al_empezar,
             )
-            self._insertar(resultado.transcripcion)
+            self._insertar(resultado)
         except Exception as error:
+            if resultado is not None and not self._guardado:
+                # Hubo texto y algo falló después: queda en el historial para no perderlo.
+                self._guardar(resultado, resultado.transcripcion.texto, "error", None, None)
             self._fallar(_mensaje_del_fallo(error))
 
     def _leer_pista(self) -> str | None:
@@ -326,7 +360,8 @@ class Aplicacion:
                 self.ultimo_arranque_ms,
             )
 
-    def _insertar(self, transcripcion: Transcripcion) -> None:
+    def _insertar(self, dictado: ResultadoDictado) -> None:
+        transcripcion = dictado.transcripcion
         ventana = self._ventana_activa()
         resolucion = self._configuracion.resolver(ventana.aplicacion if ventana else None)
         procesado = procesar(transcripcion.texto, transcripcion.idioma or None, resolucion.opciones)
@@ -335,6 +370,8 @@ class Aplicacion:
             return
         self._evento(Evento.TEXTO_LISTO)
         resultado = self._insertor.insertar(procesado.texto, resolucion.destino)
+        estado: EstadoDelHistorial = "insertado" if resultado.insertado else "no_insertado"
+        self._guardar(dictado, procesado.texto, estado, ventana, resolucion.modo.id)
         if resultado.insertado:
             self._evento(Evento.INSERTADO)
             return
@@ -342,6 +379,33 @@ class Aplicacion:
         if self._al_texto_sin_insertar is not None:
             self._al_texto_sin_insertar(procesado.texto)
         self._fallar(resultado.motivo or "No se pudo insertar el texto")
+
+    def _guardar(
+        self,
+        dictado: ResultadoDictado,
+        texto_final: str,
+        estado: EstadoDelHistorial,
+        ventana: InfoVentana | None,
+        modo_id: int | None,
+    ) -> None:
+        """Un fallo del historial nunca debe impedir ni deshacer el dictado."""
+        self._guardado = True
+        if self._historial is None:
+            return
+        proceso_ms = round((time.perf_counter() - self._soltado_s) * 1000)
+        try:
+            self._historial.guardar(
+                texto_crudo=dictado.transcripcion.texto,
+                texto_final=texto_final,
+                duracion_audio_ms=max(1, round(dictado.segundos_grabados * 1000)),
+                duracion_proceso_ms=max(0, proceso_ms),
+                estado=estado,
+                idioma=dictado.transcripcion.idioma,
+                aplicacion=ventana.aplicacion if ventana else "",
+                modo_id=modo_id,
+            )
+        except Exception:
+            _registro.exception("No se pudo guardar el dictado en el historial")
 
     def _ventana_activa(self) -> InfoVentana | None:
         futuro = self._ventana_consultada
