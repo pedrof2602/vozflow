@@ -9,6 +9,7 @@ import pytest
 from tests.dobles import EscuchaFalsa, GrabadoraFalsa, InsertorFalso, MotorFalso, VentanaFalsa
 from vozflow.aplicacion import Aplicacion
 from vozflow.atajos.puerto import AccionDeAtajo
+from vozflow.configuracion import ConfiguracionEstatica, FuenteDeConfiguracion
 from vozflow.dominio.dictado import EstadoDelDictado as E
 from vozflow.dominio.tuberia import procesar
 from vozflow.insercion.puerto import ResultadoInsercion
@@ -36,6 +37,7 @@ class Montaje:
         segundos: float = 1.5,
         ventana: InfoVentana | None = None,
         resultado: ResultadoInsercion | None = None,
+        configuracion: FuenteDeConfiguracion | None = None,
     ) -> None:
         self.escucha = EscuchaFalsa()
         self.grabadora = GrabadoraFalsa(segundos)
@@ -55,6 +57,7 @@ class Montaje:
             al_cambiar_estado=self.estados.append,
             al_aviso=self.avisos.append,
             al_texto_sin_insertar=self.sin_insertar.append,
+            configuracion=configuracion,
         )
 
     def espera_estado(self, estado: E) -> bool:
@@ -368,7 +371,7 @@ def test_una_aplicacion_marcada_como_terminal_se_trata_como_terminal() -> None:
         ventana=montaje.ventana,
         insertor=montaje.insertor,
         atajos=ATAJOS,
-        aplicaciones_terminal={"vscodium"},
+        configuracion=ConfiguracionEstatica(terminales={"vscodium"}),
     )
     montaje.app.iniciar()
     try:
@@ -442,3 +445,42 @@ def test_el_arranque_de_la_grabacion_se_mide(m: Montaje) -> None:
     assert _esperar(lambda: m.app.ultimo_arranque_ms is not None)
 
     assert m.app.ultimo_arranque_ms is not None and m.app.ultimo_arranque_ms < 150
+
+
+# ---- diccionario personal (T074) -----------------------------------------------------------------
+
+
+def test_el_diccionario_llega_al_motor_como_pista() -> None:
+    montaje = Montaje(configuracion=ConfiguracionEstatica(pista=lambda: "SQLAlchemy, FastAPI"))
+    montaje.app.iniciar()
+    try:
+        _dictar_mantenido(montaje)
+
+        assert montaje.motor.llamadas and montaje.motor.llamadas[0].pista == "SQLAlchemy, FastAPI"
+    finally:
+        montaje.app.detener()
+
+
+def test_sin_diccionario_no_hay_pista() -> None:
+    montaje = Montaje()
+    montaje.app.iniciar()
+    try:
+        _dictar_mantenido(montaje)
+
+        assert montaje.motor.llamadas[0].pista is None
+    finally:
+        montaje.app.detener()
+
+
+def test_la_pista_se_lee_en_cada_dictado_y_no_solo_al_arrancar() -> None:
+    palabras = ["uno"]
+    montaje = Montaje(configuracion=ConfiguracionEstatica(pista=lambda: ", ".join(palabras)))
+    montaje.app.iniciar()
+    try:
+        _dictar_mantenido(montaje)
+        palabras.append("dos")
+        _dictar_mantenido(montaje)
+
+        assert [c.pista for c in montaje.motor.llamadas] == ["uno", "uno, dos"]
+    finally:
+        montaje.app.detener()

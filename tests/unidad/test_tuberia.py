@@ -2,6 +2,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from vozflow.dominio.atajos_texto import AtajoTexto
 from vozflow.dominio.tuberia import OpcionesDeTuberia, ResultadoProceso, procesar
 
 TODO_ACTIVO = OpcionesDeTuberia()
@@ -143,3 +144,42 @@ def test_el_modo_espacio_nunca_produce_un_salto_con_ninguna_combinacion(
     )
 
     assert "\n" not in procesar(" ".join(piezas), None, opciones).texto
+
+
+# ---- atajos de texto (RF-020) ----------------------------------------------
+
+
+def test_expande_un_atajo_de_texto_al_final_de_la_tuberia() -> None:
+    opciones = OpcionesDeTuberia(atajos=(AtajoTexto("mi firma", "Pedro\nFreimeyer"),))
+
+    resultado = procesar("gracias por todo coma mi firma", "es", opciones)
+
+    assert resultado.texto == "Gracias por todo, Pedro\nFreimeyer"
+
+
+def test_el_reemplazo_no_pasa_por_la_limpieza_ni_la_puntuacion() -> None:
+    opciones = OpcionesDeTuberia(atajos=(AtajoTexto("saludo", "eh, o sea, hola"),))
+
+    assert procesar("saludo", "es", opciones).texto == "eh, o sea, hola"
+
+
+def test_el_reemplazo_no_se_interpreta_como_comando_de_voz() -> None:
+    opciones = OpcionesDeTuberia(atajos=(AtajoTexto("cierre", "borra eso"),))
+
+    resultado = procesar("cierre", "es", opciones)
+
+    assert resultado.descartar is False and resultado.texto == "borra eso"
+
+
+def test_sin_atajos_el_texto_queda_igual_que_antes() -> None:
+    assert procesar("hola mundo", "es", OpcionesDeTuberia()) == procesar(
+        "hola mundo", "es", OpcionesDeTuberia(atajos=())
+    )
+
+
+def test_en_un_destino_de_una_sola_linea_el_reemplazo_tambien_se_aplana() -> None:
+    opciones = OpcionesDeTuberia(
+        atajos=(AtajoTexto("firma", "Saludos,\nPedro"),), salto_de_linea="espacio"
+    )
+
+    assert procesar("firma", "es", opciones).texto == "Saludos, Pedro"

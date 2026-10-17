@@ -3,10 +3,10 @@
 import logging
 import threading
 import time
-from collections.abc import Callable, Collection, Mapping
+from collections.abc import Callable, Mapping
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as EsperaAgotada
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
@@ -15,16 +15,15 @@ import numpy.typing as npt
 from vozflow.atajos.puerto import AccionDeAtajo, EscuchaDeAtajos, EventoDeAtajo, FaseDeAtajo
 from vozflow.audio.captura import ErrorDeAudio
 from vozflow.audio.senal import FRECUENCIA
-from vozflow.dominio.comandos_voz import SaltoDeLinea
+from vozflow.configuracion import ConfiguracionEstatica, FuenteDeConfiguracion
 from vozflow.dominio.dictado import EstadoDelDictado, EstadoDictado, Evento
-from vozflow.dominio.terminales import es_terminal
 from vozflow.dominio.tuberia import (
     OPCIONES_POR_DEFECTO,
     OpcionesDeTuberia,
     ResultadoProceso,
     procesar,
 )
-from vozflow.insercion.puerto import Destino, Insertor
+from vozflow.insercion.puerto import Insertor
 from vozflow.transcripcion.motor import ErrorDeTranscripcion, MotorDeTranscripcion, Transcripcion
 from vozflow.transcripcion.por_tramos import TranscriptorPorTramos
 from vozflow.ventana.puerto import InfoVentana, VentanaActiva
@@ -202,8 +201,7 @@ class Aplicacion:
         ventana: VentanaActiva,
         insertor: Insertor,
         atajos: Mapping[AccionDeAtajo, str],
-        opciones: OpcionesDeTuberia = OPCIONES_POR_DEFECTO,
-        aplicaciones_terminal: Collection[str] = (),
+        configuracion: FuenteDeConfiguracion | None = None,
         al_cambiar_estado: Callable[[EstadoDelDictado], None] | None = None,
         al_aviso: Callable[[str], None] | None = None,
         al_texto_sin_insertar: Callable[[str], None] | None = None,
@@ -214,8 +212,7 @@ class Aplicacion:
         self._ventana = ventana
         self._insertor = insertor
         self._atajos = dict(atajos)
-        self._opciones = opciones
-        self._aplicaciones_terminal = frozenset(aplicaciones_terminal)
+        self._configuracion = configuracion or ConfiguracionEstatica()
         self._al_cambiar_estado = al_cambiar_estado
         self._al_aviso = al_aviso
         self._al_texto_sin_insertar = al_texto_sin_insertar
@@ -302,12 +299,21 @@ class Aplicacion:
                 grabadora=self._grabadora,
                 motor=self._motor,
                 seguir=lambda: not self._fin_de_grabacion.is_set(),
+                pista=self._leer_pista(),
                 esperar=self._esperar_el_fin,
                 al_empezar=self._al_empezar,
             )
             self._insertar(resultado.transcripcion)
         except Exception as error:
             self._fallar(_mensaje_del_fallo(error))
+
+    def _leer_pista(self) -> str | None:
+        """El diccionario se lee en cada dictado, así una palabra nueva rige enseguida."""
+        try:
+            return self._configuracion.pista()
+        except Exception:
+            _registro.exception("No se pudo leer el diccionario")
+            return None
 
     def _esperar_el_fin(self, segundos: float) -> None:
         self._fin_de_grabacion.wait(segundos)
@@ -322,18 +328,13 @@ class Aplicacion:
 
     def _insertar(self, transcripcion: Transcripcion) -> None:
         ventana = self._ventana_activa()
-        salto: SaltoDeLinea = "conservar"
-        if ventana is not None and es_terminal(ventana.aplicacion, self._aplicaciones_terminal):
-            salto = "espacio"
-        opciones = (
-            replace(self._opciones, salto_de_linea=salto) if salto == "espacio" else self._opciones
-        )
-        procesado = procesar(transcripcion.texto, transcripcion.idioma or None, opciones)
+        resolucion = self._configuracion.resolver(ventana.aplicacion if ventana else None)
+        procesado = procesar(transcripcion.texto, transcripcion.idioma or None, resolucion.opciones)
         if self._cancelado or procesado.descartar or not procesado.texto.strip():
             self._evento(Evento.SIN_VOZ)
             return
         self._evento(Evento.TEXTO_LISTO)
-        resultado = self._insertor.insertar(procesado.texto, Destino(salto_de_linea=salto))
+        resultado = self._insertor.insertar(procesado.texto, resolucion.destino)
         if resultado.insertado:
             self._evento(Evento.INSERTADO)
             return
