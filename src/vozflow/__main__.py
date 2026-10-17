@@ -152,6 +152,7 @@ def _crear_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--alternar", help="atajo para empezar y terminar (por defecto <Control><Alt>space)"
     )
+    parser.add_argument("--traducir", help="tecla para mantener, hablar y traducir (RightAlt)")
     parser.add_argument("--modelo", help="modelo de transcripción (por defecto, el de los ajustes)")
     parser.add_argument(
         "--dispositivo", type=_dispositivo, help="micrófono: índice o parte del nombre"
@@ -325,7 +326,9 @@ def _orden_servicio(
     base = dependencias.abrir_base()
     try:
         repo = AjustesRepo(base)
-        ajustes = repo.cargar().con_atajos(argumentos.mantener, argumentos.alternar)
+        ajustes = repo.cargar().con_atajos(
+            argumentos.mantener, argumentos.alternar, argumentos.traducir
+        )
         aplicacion = Aplicacion(
             escucha=servicio.crear_escucha(),
             grabadora=dependencias.crear_grabadora(),

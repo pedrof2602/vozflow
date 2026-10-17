@@ -23,6 +23,7 @@ from vozflow.persistencia.historial import HistorialRepo
 from vozflow.servicio_dbus import InstanciaYaEnEjecucion
 
 M, A = AccionDeAtajo.MANTENER, AccionDeAtajo.ALTERNAR
+T = AccionDeAtajo.TRADUCIR
 _DIRECTORIO: list[Path] = [Path()]
 
 
@@ -97,7 +98,7 @@ def test_arranca_carga_el_modelo_escucha_los_atajos_por_defecto_y_se_apaga_limpi
 
     assert codigo == CODIGO_OK
     assert m.motor.veces_cargado >= 1 and m.motor.cargado is False  # lo libera al apagar
-    assert m.atajos_pedidos == {M: "RightCtrl", A: "<Control><Alt>space"}
+    assert m.atajos_pedidos == {M: "RightCtrl", A: "<Control><Alt>space", T: "RightAlt"}
     assert "RightCtrl" in capsys.readouterr().err
 
 
@@ -110,7 +111,7 @@ def test_los_atajos_se_pueden_cambiar_por_la_linea_de_comandos() -> None:
 
     m.correr("--mantener", "F9", "--alternar", "<Control><Alt>d")
 
-    assert m.atajos_pedidos == {M: "F9", A: "<Control><Alt>d"}
+    assert m.atajos_pedidos == {M: "F9", A: "<Control><Alt>d", T: "RightAlt"}
 
 
 def test_muestra_el_estado_por_consola_sin_mostrar_lo_dictado(

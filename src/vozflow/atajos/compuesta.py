@@ -38,10 +38,15 @@ class EscuchaCompuesta:
     def iniciar(self, atajos: Mapping[AccionDeAtajo, str], al_evento: AlEvento) -> None:
         if self._iniciada:
             raise RuntimeError("La escucha ya está iniciada")
+        # Las acciones que comparten la misma lista de técnicas (mantener y traducir leen el mismo
+        # teclado) arrancan juntas con una sola escucha.
+        grupos: dict[tuple[FabricaDeEscucha, ...], dict[AccionDeAtajo, str]] = {}
+        for accion, texto in atajos.items():
+            grupos.setdefault(tuple(self.candidatas.get(accion, [])), {})[accion] = texto
         activas: list[EscuchaDeAtajos] = []
         try:
-            for accion, texto in atajos.items():
-                activas.append(self._iniciar_accion(accion, texto, al_evento))
+            for fabricas, acciones in grupos.items():
+                activas.append(self._iniciar_grupo(fabricas, acciones, al_evento))
         except BaseException:
             for escucha in reversed(activas):
                 _detener_sin_fallar(escucha)
@@ -55,20 +60,24 @@ class EscuchaCompuesta:
         for escucha in reversed(activas):
             _detener_sin_fallar(escucha)
 
-    def _iniciar_accion(
-        self, accion: AccionDeAtajo, texto: str, al_evento: AlEvento
+    def _iniciar_grupo(
+        self,
+        fabricas: tuple[FabricaDeEscucha, ...],
+        acciones: Mapping[AccionDeAtajo, str],
+        al_evento: AlEvento,
     ) -> EscuchaDeAtajos:
+        nombre_del_grupo = " y ".join(a.value for a in acciones)
         errores: list[tuple[str, Exception]] = []
-        for fabrica in self.candidatas.get(accion, []):
+        for fabrica in fabricas:
             escucha = fabrica()
             nombre = type(escucha).__name__
             try:
-                escucha.iniciar({accion: texto}, al_evento)
+                escucha.iniciar(acciones, al_evento)
             except InstanciaYaEnEjecucion, ValueError:
                 _detener_sin_fallar(escucha)
                 raise
             except _FALLOS_RECUPERABLES as error:
-                _registro.info("%s no sirvió para el atajo %s: %s", nombre, accion.value, error)
+                _registro.info("%s no sirvió para %s: %s", nombre, nombre_del_grupo, error)
                 errores.append((nombre, error))
                 _detener_sin_fallar(escucha)
                 continue
@@ -78,7 +87,7 @@ class EscuchaCompuesta:
             raise ocupado
         motivos = "; ".join(f"{nombre}: {error}" for nombre, error in errores)
         raise NingunAdaptadorSirve(
-            f"No se pudo escuchar el atajo «{accion.value}» con ninguna técnica"
+            f"No se pudo escuchar el atajo «{nombre_del_grupo}» con ninguna técnica"
             + (f" ({motivos})" if motivos else "")
         )
 

@@ -148,3 +148,26 @@ def test_probar_cuando_falla_da_el_motivo_sin_la_clave() -> None:
         gestion.probar("anthropic")
 
     assert "rechazó la clave" in str(error.value) and CLAVE not in str(error.value)
+
+
+# ---- idioma de destino de la traducción (lote 6) ---------------------------------------------------------
+
+
+def test_el_idioma_de_destino_empieza_en_ingles_y_se_puede_cambiar() -> None:
+    gestion, _, ajustes, _ = _gestion()
+
+    assert gestion.idioma_de_traduccion() == "inglés"
+    gestion.establecer_idioma_de_traduccion("  portugués ")
+
+    assert gestion.idioma_de_traduccion() == "portugués"
+    assert ajustes.obtener("traduccion.idioma") == "portugués"
+
+
+@pytest.mark.parametrize("idioma", ["", "  ", "x", "a" * 41, "dos\nlíneas"])
+def test_un_idioma_de_destino_invalido_es_un_error_de_proveedor(idioma: str) -> None:
+    gestion, _, _, _ = _gestion()
+
+    with pytest.raises(ErrorDeProveedor, match="idioma"):
+        gestion.establecer_idioma_de_traduccion(idioma)
+
+    assert gestion.idioma_de_traduccion() == "inglés"

@@ -556,3 +556,57 @@ def test_pausar_en_medio_de_una_grabacion_la_termina_normalmente(m: Montaje) -> 
     m.escucha.soltar(M)  # soltar sigue funcionando: si no, la grabación quedaría colgada
 
     assert _esperar(lambda: len(m.insertor.insertados) == 1)
+
+
+# ---- una sesión la termina la misma tecla que la empezó --------------------------------------------------
+
+
+def test_soltar_otra_tecla_no_corta_una_sesion_de_traducir(m: Montaje) -> None:
+    m.escucha.pulsar(AccionDeAtajo.TRADUCIR)
+    assert m.espera_estado(E.ESCUCHANDO)
+
+    m.escucha.pulsar(M)
+    m.escucha.soltar(M)  # la otra tecla de mantener no tiene nada que cortar
+    time.sleep(0.15)
+    assert m.app.estado is E.ESCUCHANDO
+
+    m.escucha.soltar(AccionDeAtajo.TRADUCIR)
+    # Sin reescritura configurada no hay a quién pedirle la traducción: solo importa que la
+    # grabación terminó cuando soltó la tecla que la empezó.
+    assert _esperar(lambda: m.grabadora.detenidas == 1)
+
+
+def test_soltar_traducir_no_corta_una_sesion_de_mantener(m: Montaje) -> None:
+    m.escucha.pulsar(M)
+    assert m.espera_estado(E.ESCUCHANDO)
+
+    m.escucha.pulsar(AccionDeAtajo.TRADUCIR)
+    m.escucha.soltar(AccionDeAtajo.TRADUCIR)
+    time.sleep(0.15)
+    assert m.app.estado is E.ESCUCHANDO
+
+    m.escucha.soltar(M)
+    assert _esperar(lambda: len(m.insertor.insertados) == 1)
+
+
+# ---- el idioma de la traducción en curso (lote 6) --------------------------------------------------------
+
+
+def test_durante_una_sesion_de_traducir_se_sabe_a_que_idioma(m: Montaje) -> None:
+    assert m.app.idioma_en_curso is None
+
+    m.escucha.pulsar(AccionDeAtajo.TRADUCIR)
+    assert m.espera_estado(E.ESCUCHANDO)
+    assert m.app.idioma_en_curso == "inglés"
+
+    m.escucha.soltar(AccionDeAtajo.TRADUCIR)
+    assert _esperar(lambda: m.app.estado in (E.INACTIVO, E.ERROR))
+    assert m.app.idioma_en_curso is None
+
+
+def test_en_una_sesion_normal_no_hay_idioma_en_curso(m: Montaje) -> None:
+    m.escucha.pulsar(M)
+    assert m.espera_estado(E.ESCUCHANDO)
+
+    assert m.app.idioma_en_curso is None
+    m.escucha.soltar(M)

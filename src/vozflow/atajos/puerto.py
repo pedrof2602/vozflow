@@ -1,9 +1,9 @@
 """Contrato de la escucha de atajos (contracts/puertos.md, RF-001 a RF-004).
 
-Hay dos acciones: ``mantener`` (hablar mientras se aprieta la tecla) y ``alternar`` (una
-pulsación empieza y otra termina). Cada técnica del sistema —el atajo de GNOME, ``evdev``, el
-portal— traduce lo que ve a ``pulsado`` y ``soltado`` y se lo pasa a un ``Despachador``, que
-aplica las mismas reglas para todas.
+Hay tres acciones: ``mantener`` (hablar mientras se aprieta la tecla), ``traducir`` (igual, pero
+el dictado se traduce) y ``alternar`` (una pulsación empieza y otra termina). Cada técnica del
+sistema —el atajo de GNOME, ``evdev``, el portal— traduce lo que ve a ``pulsado`` y ``soltado``
+y se lo pasa a un ``Despachador``, que aplica las mismas reglas para todas.
 """
 
 import logging
@@ -19,6 +19,7 @@ _registro = logging.getLogger(__name__)
 class AccionDeAtajo(StrEnum):
     MANTENER = "mantener"
     ALTERNAR = "alternar"
+    TRADUCIR = "traducir"
 
 
 class FaseDeAtajo(StrEnum):
@@ -51,7 +52,8 @@ class EscuchaDeAtajos(Protocol):
 class FiltroDeRepeticion:
     """Quita las repeticiones de una tecla mantenida y los ``soltado`` que no corresponden.
 
-    - ``mantener``: pasan ``pulsado`` y el ``soltado`` que le sigue; todo lo demás se ignora.
+    - ``mantener`` y ``traducir``: pasan ``pulsado`` y el ``soltado`` que le sigue; todo lo demás
+      se ignora.
     - ``alternar``: pasa un ``pulsado`` por cada pulsación; el ``soltado`` nunca pasa.
     """
 
@@ -68,7 +70,7 @@ class FiltroDeRepeticion:
         if not apretada:
             return False
         self._apretadas.discard(evento.accion)
-        return evento.accion is AccionDeAtajo.MANTENER
+        return evento.accion is not AccionDeAtajo.ALTERNAR
 
     def reiniciar(self) -> None:
         self._apretadas.clear()

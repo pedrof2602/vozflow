@@ -172,3 +172,32 @@ def test_se_ubica_en_la_pantalla_abajo_y_al_centro(qtbot: QtBot) -> None:
     pantalla = indicador.screen().availableGeometry()
     assert pantalla.contains(indicador.geometry().center())
     assert indicador.geometry().center().y() > pantalla.center().y()
+
+
+# ---- traducir (lote 6) -----------------------------------------------------------------------------------
+
+
+def test_al_traducir_el_indicador_dice_el_idioma_de_destino(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+
+    indicador.establecer_estado(E.ESCUCHANDO, "inglés")
+
+    assert (
+        "Escuchando" in indicador.texto and "inglés" in indicador.texto and "→" in indicador.texto
+    )
+
+
+def test_sin_traducir_el_texto_no_cambia(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+
+    indicador.establecer_estado(E.ESCUCHANDO)
+
+    assert "→" not in indicador.texto
+
+
+def test_mientras_transcribe_una_traduccion_sigue_mostrando_el_destino(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+
+    indicador.establecer_estado(E.TRANSCRIBIENDO, "francés")
+
+    assert "francés" in indicador.texto

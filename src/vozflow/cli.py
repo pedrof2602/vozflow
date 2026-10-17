@@ -122,6 +122,8 @@ def registrar(ordenes: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     activar = acciones.add_parser("activar", help="enciende la reescritura con este proveedor")
     activar.add_argument("id", choices=PROVEEDORES)
     acciones.add_parser("desactivar", help="apaga la reescritura")
+    idioma = acciones.add_parser("idioma", help="ve o cambia el idioma de la tecla de traducir")
+    idioma.add_argument("idioma", nargs="?", help="por ejemplo: inglés, portugués, francés")
     probar = acciones.add_parser("probar", help="prueba la conexión con un texto de ejemplo")
     probar.add_argument("id", nargs="?", choices=PROVEEDORES)
 
@@ -318,6 +320,7 @@ def _proveedor_con(a: Argumentos, ctx: Contexto, gestion: GestionDeProveedores) 
     salida = ctx.salida
     if a.accion == "listar":
         salida(f"Reescritura: {'encendida' if gestion.reescritura_encendida() else 'apagada'}")
+        salida(f"La tecla de traducir traduce al: {gestion.idioma_de_traduccion()}")
         for estado in gestion.estado():
             salida(_linea_de_proveedor(estado))
     elif a.accion == "configurar":
@@ -337,6 +340,12 @@ def _proveedor_con(a: Argumentos, ctx: Contexto, gestion: GestionDeProveedores) 
     elif a.accion == "desactivar":
         gestion.desactivar()
         salida("Reescritura apagada.")
+    elif a.accion == "idioma":
+        if a.idioma is None:
+            salida(f"La tecla de traducir traduce al: {gestion.idioma_de_traduccion()}")
+        else:
+            gestion.establecer_idioma_de_traduccion(a.idioma)
+            salida(f"La tecla de traducir ahora traduce al: {gestion.idioma_de_traduccion()}")
     else:
         salida(f"Funciona: {gestion.probar(a.id)}")
 

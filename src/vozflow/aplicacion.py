@@ -185,6 +185,8 @@ _ESPERA_AL_DETENER_S = 15.0
 _EVENTOS = {
     (AccionDeAtajo.MANTENER, FaseDeAtajo.PULSADO): Evento.PULSAR,
     (AccionDeAtajo.MANTENER, FaseDeAtajo.SOLTADO): Evento.SOLTAR,
+    (AccionDeAtajo.TRADUCIR, FaseDeAtajo.PULSADO): Evento.PULSAR,
+    (AccionDeAtajo.TRADUCIR, FaseDeAtajo.SOLTADO): Evento.SOLTAR,
     (AccionDeAtajo.ALTERNAR, FaseDeAtajo.PULSADO): Evento.ALTERNAR,
 }
 
@@ -192,7 +194,9 @@ _EVENTOS = {
 class Reescritura(Protocol):
     """Reescribe con un modelo de lenguaje si corresponde; ``ReescrituraDeBase`` la cumple."""
 
-    def intentar(self, texto: str, modo: Modo) -> ResultadoReescritura: ...
+    def intentar(
+        self, texto: str, modo: Modo, traducir_a: str | None = None
+    ) -> ResultadoReescritura: ...
 
 
 class RegistroDeDictados(Protocol):
@@ -259,9 +263,11 @@ class Aplicacion:
         self._dictado = EstadoDictado(al_cambiar=self._publicar)
         self._fin_de_grabacion = threading.Event()
         self._hilo: threading.Thread | None = None
-        self._por_mantener = False
+        self._accion_inicial: AccionDeAtajo | None = None
         self._cancelado = False
         self.pausada = False
+        self.idioma_en_curso: str | None = None
+        """El idioma de destino mientras dura un dictado hecho con la tecla de traducir."""
         self._inicio_s = 0.0
         self._ventana_consultada: Future[InfoVentana | None] | None = None
         self.texto_sin_insertar: str | None = None
@@ -327,22 +333,41 @@ class Aplicacion:
             escuchando = self._dictado.estado is EstadoDelDictado.ESCUCHANDO
             if self.pausada and not escuchando and traducido is not Evento.SOLTAR:
                 return  # en pausa no se empiezan dictados nuevos
-            if traducido is Evento.SOLTAR and escuchando and not self._por_mantener:
-                return  # se empezó con «alternar»: soltar la otra tecla no corta nada
+            if traducido is Evento.SOLTAR and escuchando and evento.accion != self._accion_inicial:
+                return  # solo la tecla que empezó puede terminar (soltar otra no corta nada)
+            anterior = self.idioma_en_curso
+            if not escuchando and traducido is not Evento.SOLTAR:
+                # Antes de cambiar el estado: quien lo escucha ya tiene que ver el idioma.
+                self.idioma_en_curso = self._idioma_si_traduce(evento.accion)
             if not self._dictado.manejar(traducido):
+                self.idioma_en_curso = anterior
                 return
             if self._dictado.estado is EstadoDelDictado.ESCUCHANDO:
-                self._empezar(por_mantener=traducido is Evento.PULSAR)
+                self._empezar(evento.accion)
             elif escuchando:
                 self._soltado_s = time.perf_counter()
                 self._fin_de_grabacion.set()
 
-    def _empezar(self, *, por_mantener: bool) -> None:
-        self._por_mantener = por_mantener
+    def _idioma_si_traduce(self, accion: AccionDeAtajo) -> str | None:
+        if accion is not AccionDeAtajo.TRADUCIR:
+            return None
+        try:
+            return self._configuracion.idioma_de_traduccion()
+        except Exception:
+            _registro.exception("No se pudo leer el idioma de traducción")
+            return None
+
+    def _empezar(self, accion: AccionDeAtajo) -> None:
+        self._accion_inicial = accion
         self._inicio_s = time.perf_counter()
         self._fin_de_grabacion.clear()
         self._ventana_consultada = self._consultar_ventana()
-        self._hilo = threading.Thread(target=self._dictar, name="vozflow-dictado", daemon=True)
+        self._hilo = threading.Thread(
+            target=self._dictar,
+            args=(accion is AccionDeAtajo.TRADUCIR,),
+            name="vozflow-dictado",
+            daemon=True,
+        )
         self._hilo.start()
 
     def _consultar_ventana(self) -> Future[InfoVentana | None]:
@@ -360,7 +385,7 @@ class Aplicacion:
 
     # ---- un dictado --------------------------------------------------------------------------
 
-    def _dictar(self) -> None:
+    def _dictar(self, traduciendo: bool) -> None:
         self._guardado = False
         resultado: ResultadoDictado | None = None
         try:
@@ -374,7 +399,7 @@ class Aplicacion:
                 esperar=self._esperar_el_fin,
                 al_empezar=self._al_empezar,
             )
-            self._insertar(resultado)
+            self._insertar(resultado, traduciendo)
         except Exception as error:
             if resultado is not None and not self._guardado:
                 # Hubo texto y algo falló después: queda en el historial para no perderlo.
@@ -400,12 +425,12 @@ class Aplicacion:
                 self.ultimo_arranque_ms,
             )
 
-    def _insertar(self, dictado: ResultadoDictado) -> None:
+    def _insertar(self, dictado: ResultadoDictado, traduciendo: bool) -> None:
         transcripcion = dictado.transcripcion
         ventana = self._ventana_activa()
         resolucion = self._configuracion.resolver(ventana.aplicacion if ventana else None)
         opciones = resolucion.opciones
-        # Los atajos de texto se expanden al final, después de reescribir.
+        # Los atajos de texto se expanden al final, después de reescribir o traducir.
         limpio = procesar(
             transcripcion.texto, transcripcion.idioma or None, replace(opciones, atajos=())
         )
@@ -413,8 +438,13 @@ class Aplicacion:
             self._evento(Evento.SIN_VOZ)
             return
         texto, proveedor = limpio.texto, ""
-        if self._reescritura is not None:
-            reescrito = self._reescritura.intentar(texto, resolucion.modo)
+        if traduciendo or self._reescritura is not None:
+            traducir_a = self._configuracion.idioma_de_traduccion() if traduciendo else None
+            reescrito = self._reescribir(texto, resolucion.modo, traducir_a)
+            if traduciendo and reescrito.fallo:
+                self._no_se_pudo_traducir(dictado, limpio.texto, ventana, resolucion.modo.id)
+                self._fallar(reescrito.aviso or "No se pudo traducir")
+                return
             texto, proveedor = reescrito.texto, reescrito.proveedor
             if reescrito.aviso is not None:
                 self._avisar(reescrito.aviso)
@@ -430,6 +460,29 @@ class Aplicacion:
         if self._al_texto_sin_insertar is not None:
             self._al_texto_sin_insertar(texto)
         self._fallar(resultado.motivo or "No se pudo insertar el texto")
+
+    def _reescribir(self, texto: str, modo: Modo, traducir_a: str | None) -> ResultadoReescritura:
+        if self._reescritura is None:
+            return ResultadoReescritura(
+                texto,
+                aviso="No se pudo traducir: la reescritura no está configurada. "
+                "No se insertó nada; el texto quedó en el historial.",
+                fallo=True,
+            )
+        return self._reescritura.intentar(texto, modo, traducir_a)
+
+    def _no_se_pudo_traducir(
+        self,
+        dictado: ResultadoDictado,
+        texto: str,
+        ventana: InfoVentana | None,
+        modo_id: int,
+    ) -> None:
+        """Nada en el idioma equivocado: el texto queda en el historial para recuperarlo."""
+        self._guardar(dictado, texto, "no_insertado", ventana, modo_id)
+        self.texto_sin_insertar = texto
+        if self._al_texto_sin_insertar is not None:
+            self._al_texto_sin_insertar(texto)
 
     def _guardar(
         self,
@@ -483,6 +536,8 @@ class Aplicacion:
             self._dictado.manejar(evento)
 
     def _publicar(self, anterior: EstadoDelDictado, nuevo: EstadoDelDictado) -> None:
+        if nuevo in (EstadoDelDictado.INACTIVO, EstadoDelDictado.ERROR):
+            self.idioma_en_curso = None
         if self._al_cambiar_estado is not None:
             self._al_cambiar_estado(nuevo)
 

@@ -12,6 +12,7 @@ from vozflow.dominio.atajos_texto import AtajoTexto
 from vozflow.dominio.diccionario import construir_pista
 from vozflow.dominio.modos import Asignacion, Modo, Resolucion, resolver
 from vozflow.dominio.tuberia import OPCIONES_POR_DEFECTO, OpcionesDeTuberia
+from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.asignaciones_repo import AsignacionesRepo
 from vozflow.persistencia.atajos_texto_repo import AtajosTextoRepo
 from vozflow.persistencia.diccionario_repo import DiccionarioRepo
@@ -27,6 +28,10 @@ class FuenteDeConfiguracion(Protocol):
         """El modo, las opciones de texto (con los atajos) y el destino de la aplicación."""
         ...
 
+    def idioma_de_traduccion(self) -> str:
+        """El idioma al que traduce la tecla de traducir."""
+        ...
+
 
 class ConfiguracionEstatica:
     """Sin base de datos: un solo modo general y, si se quiere, una pista y terminales marcadas."""
@@ -36,13 +41,18 @@ class ConfiguracionEstatica:
         opciones: OpcionesDeTuberia = OPCIONES_POR_DEFECTO,
         terminales: Collection[str] = (),
         pista: Callable[[], str | None] | None = None,
+        idioma_de_traduccion: str = "inglés",
     ) -> None:
+        self._idioma_de_traduccion = idioma_de_traduccion
         self._opciones = opciones
         self._terminales = frozenset(terminales)
         self._pista = pista
 
     def pista(self) -> str | None:
         return self._pista() if self._pista is not None else None
+
+    def idioma_de_traduccion(self) -> str:
+        return self._idioma_de_traduccion
 
     def resolver(self, aplicacion: str | None) -> Resolucion:
         general = Modo(
@@ -63,6 +73,7 @@ class ConfiguracionEstatica:
 
 class ConfiguracionDeBase:
     def __init__(self, base: sqlite3.Connection) -> None:
+        self._ajustes = AjustesRepo(base)
         self._diccionario = DiccionarioRepo(base)
         self._atajos = AtajosTextoRepo(base)
         self._modos = ModosRepo(base)
@@ -70,6 +81,9 @@ class ConfiguracionDeBase:
 
     def pista(self) -> str | None:
         return construir_pista([e.palabra for e in self._diccionario.listar()])
+
+    def idioma_de_traduccion(self) -> str:
+        return str(self._ajustes.obtener("traduccion.idioma"))
 
     def atajos_de_texto(self) -> Sequence[AtajoTexto]:
         return self._atajos.listar()

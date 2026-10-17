@@ -70,6 +70,23 @@ def _alternar(valor: Any) -> str:
         raise DatoInvalido(f"Atajo no válido: {error}") from error
 
 
+_IDIOMA_DE_TRADUCCION_MIN, _IDIOMA_DE_TRADUCCION_MAX = 2, 40
+
+
+def _idioma_de_traduccion(valor: Any) -> str:
+    texto = _texto(valor).strip()
+    if not _IDIOMA_DE_TRADUCCION_MIN <= len(texto) <= _IDIOMA_DE_TRADUCCION_MAX:
+        raise DatoInvalido(
+            f"El idioma de destino tiene que tener entre {_IDIOMA_DE_TRADUCCION_MIN} y "
+            f"{_IDIOMA_DE_TRADUCCION_MAX} caracteres"
+        )
+    if not texto.isprintable():
+        raise DatoInvalido(
+            "El idioma de destino no puede tener saltos de línea ni caracteres raros"
+        )
+    return texto
+
+
 @dataclass(frozen=True)
 class _Clave:
     defecto: Any
@@ -79,6 +96,8 @@ class _Clave:
 _CLAVES: dict[str, _Clave] = {
     "atajo.mantener": _Clave("RightCtrl", _mantener),
     "atajo.alternar": _Clave("<Control><Alt>space", _alternar),
+    "atajo.traducir": _Clave("RightAlt", _mantener),
+    "traduccion.idioma": _Clave("inglés", _idioma_de_traduccion),
     "audio.dispositivo": _Clave("", _texto),
     "idioma.modo": _Clave("automatico", _idioma),
     "motor.modelo": _Clave(MODELO_POR_DEFECTO, _texto_no_vacio),
@@ -87,6 +106,9 @@ _CLAVES: dict[str, _Clave] = {
     "reescritura.activa": _Clave(False, _booleano),
     "interfaz.indicador": _Clave(True, _booleano),
 }
+
+
+_ATAJOS = ("atajo.mantener", "atajo.alternar", "atajo.traducir")
 
 
 def _igual(a: str, b: str) -> bool:
@@ -105,6 +127,8 @@ class Ajustes:
 
     atajo_mantener: str
     atajo_alternar: str
+    atajo_traducir: str
+    idioma_de_traduccion: str
     dispositivo: str | None
     idioma: str | None
     modelo: str
@@ -117,14 +141,18 @@ class Ajustes:
         return {
             AccionDeAtajo.MANTENER: self.atajo_mantener,
             AccionDeAtajo.ALTERNAR: self.atajo_alternar,
+            AccionDeAtajo.TRADUCIR: self.atajo_traducir,
         }
 
-    def con_atajos(self, mantener: str | None, alternar: str | None) -> Ajustes:
+    def con_atajos(
+        self, mantener: str | None, alternar: str | None, traducir: str | None = None
+    ) -> Ajustes:
         """Cambia los atajos solo para esta ejecución (no toca la base)."""
         return replace(
             self,
             atajo_mantener=mantener or self.atajo_mantener,
             atajo_alternar=alternar or self.atajo_alternar,
+            atajo_traducir=traducir or self.atajo_traducir,
         )
 
 
@@ -145,9 +173,10 @@ class AjustesRepo:
     def establecer(self, clave: str, valor: Any) -> None:
         definicion = self._definicion(clave)
         limpio = definicion.validar(valor)
-        otra = "atajo.alternar" if clave == "atajo.mantener" else "atajo.mantener"
-        if clave.startswith("atajo.") and _igual(limpio, self.obtener(otra)):
-            raise DatoInvalido("Los dos atajos tienen que ser teclas distintas")
+        if clave in _ATAJOS and any(
+            _igual(limpio, self.obtener(otra)) for otra in _ATAJOS if otra != clave
+        ):
+            raise DatoInvalido("Los atajos tienen que ser teclas distintas")
         with self._base:
             self._base.execute(
                 "INSERT INTO ajuste (clave, valor) VALUES (?, ?) "
@@ -159,20 +188,32 @@ class AjustesRepo:
     def defecto(clave: str) -> Any:
         return AjustesRepo._definicion(clave).defecto
 
-    def validar_atajos(self, mantener: str, alternar: str) -> tuple[str, str]:
-        """Comprueba los dos atajos juntos y los devuelve normalizados, sin guardar nada."""
-        validos = (_mantener(mantener), _alternar(alternar))
-        if _igual(*validos):
-            raise DatoInvalido("Los dos atajos tienen que ser teclas distintas")
+    def validar_atajos(
+        self, mantener: str, alternar: str, traducir: str | None = None
+    ) -> tuple[str, str, str]:
+        """Comprueba los tres atajos juntos y los devuelve normalizados, sin guardar nada.
+
+        Si no se indica ``traducir`` se usa el que ya estaba guardado.
+        """
+        validos = (
+            _mantener(mantener),
+            _alternar(alternar),
+            _mantener(traducir if traducir is not None else self.obtener("atajo.traducir")),
+        )
+        if any(_igual(validos[a], validos[b]) for a, b in ((0, 1), (0, 2), (1, 2))):
+            raise DatoInvalido("Los atajos tienen que ser teclas distintas")
         return validos
 
-    def establecer_atajos(self, mantener: str, alternar: str) -> None:
-        """Cambia los dos atajos a la vez: o se guardan los dos o ninguno."""
-        valido_mantener, valido_alternar = self.validar_atajos(mantener, alternar)
+    def establecer_atajos(self, mantener: str, alternar: str, traducir: str | None = None) -> None:
+        """Cambia los atajos a la vez: o se guardan todos o ninguno."""
+        valido_mantener, valido_alternar, valido_traducir = self.validar_atajos(
+            mantener, alternar, traducir
+        )
         with self._base:
             for clave, valor in (
                 ("atajo.mantener", valido_mantener),
                 ("atajo.alternar", valido_alternar),
+                ("atajo.traducir", valido_traducir),
             ):
                 self._base.execute(
                     "INSERT INTO ajuste (clave, valor) VALUES (?, ?) "
@@ -193,6 +234,8 @@ class AjustesRepo:
         return Ajustes(
             atajo_mantener=self.obtener("atajo.mantener"),
             atajo_alternar=self.obtener("atajo.alternar"),
+            atajo_traducir=self.obtener("atajo.traducir"),
+            idioma_de_traduccion=self.obtener("traduccion.idioma"),
             dispositivo=self.obtener("audio.dispositivo") or None,
             idioma=None if idioma == "automatico" else idioma,
             modelo=self.obtener("motor.modelo"),

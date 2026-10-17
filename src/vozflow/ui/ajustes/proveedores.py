@@ -20,6 +20,9 @@ from vozflow.ui.ajustes.base import PaginaBase
 
 EnSegundoPlano = Callable[[Callable[[], str], Callable[[str, bool], None]], None]
 _NOMBRES = {"ollama": "Ollama (local)", "anthropic": "Anthropic", "openrouter": "OpenRouter"}
+_IDIOMAS_SUGERIDOS = (
+    "inglés", "español", "portugués", "francés", "alemán", "italiano", "japonés", "chino",
+)  # fmt: skip
 
 
 class _Puente(QObject):
@@ -62,6 +65,14 @@ class PaginaProveedores(PaginaBase):
         self.campo_direccion = QLineEdit()
         self.campo_clave = QLineEdit()
         self.campo_clave.setEchoMode(QLineEdit.EchoMode.Password)
+        self.combo_idioma = QComboBox()
+        self.combo_idioma.setEditable(True)
+        self.combo_idioma.addItems(_IDIOMAS_SUGERIDOS)
+        self.aclaracion_de_traduccion = QLabel(
+            "La tecla de traducir usa este mismo servicio: con la reescritura apagada no envía "
+            "nada y, si falla, no inserta texto sin traducir."
+        )
+        self.aclaracion_de_traduccion.setWordWrap(True)
         formulario = QFormLayout(self)
         formulario.addRow(self.estado_general)
         formulario.addRow("Proveedor", self.combo_proveedor)
@@ -69,6 +80,8 @@ class PaginaProveedores(PaginaBase):
         formulario.addRow("Tiempo máximo", self.spin_tiempo)
         formulario.addRow("Dirección (solo Ollama)", self.campo_direccion)
         formulario.addRow("Clave de acceso", self.campo_clave)
+        formulario.addRow("Traducir al idioma", self.combo_idioma)
+        formulario.addRow(self.aclaracion_de_traduccion)
         botones = QHBoxLayout()
         for texto, accion in (
             ("Guardar", self.guardar),
@@ -97,6 +110,7 @@ class PaginaProveedores(PaginaBase):
                 tiempo_maximo_s=self.spin_tiempo.value(),
                 direccion=self.campo_direccion.text() if self._id == "ollama" else None,
             )
+            self._gestion.establecer_idioma_de_traduccion(self.combo_idioma.currentText())
             if self.campo_clave.text().strip() and self._id != "ollama":
                 self._gestion.guardar_clave(self._id, self.campo_clave.text())
         except ErrorDeProveedor as error:
@@ -150,6 +164,7 @@ class PaginaProveedores(PaginaBase):
             else "Hay una clave guardada (escribí otra para reemplazarla)" if estado.tiene_clave
             else "Pegá la clave de acceso"
         )  # fmt: skip
+        self.combo_idioma.setCurrentText(self._gestion.idioma_de_traduccion())
         activo = self._gestion.proveedor_activo()
         if self._gestion.reescritura_encendida() and activo is not None:
             self.estado_general.setText(f"Reescritura encendida con {_NOMBRES[activo.id]}.")

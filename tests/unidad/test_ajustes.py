@@ -26,6 +26,8 @@ POR_DEFECTO = {
     "historial.activo": True,
     "reescritura.activa": False,
     "interfaz.indicador": True,
+    "atajo.traducir": "RightAlt",
+    "traduccion.idioma": "inglés",
 }
 
 
@@ -70,6 +72,11 @@ def test_el_audio_por_defecto_es_el_predeterminado_del_sistema(ajustes: AjustesR
         ("historial.activo", False),
         ("reescritura.activa", True),
         ("interfaz.indicador", False),
+        ("atajo.traducir", "F10"),
+        ("atajo.traducir", "RightShift"),
+        ("traduccion.idioma", "portugués"),
+        ("traduccion.idioma", "chino mandarín"),
+        ("traduccion.idioma", "es"),
     ],
 )
 def test_un_valor_valido_se_guarda_y_se_lee_con_su_tipo(
@@ -121,6 +128,16 @@ def test_restablecer_vuelve_al_defecto(ajustes: AjustesRepo) -> None:
         ("atajo.alternar", "RightCtrl"),
         ("atajo.alternar", ""),
         ("audio.dispositivo", 3),
+        ("atajo.traducir", ""),
+        ("atajo.traducir", "TeclaQueNoExiste"),
+        ("atajo.traducir", "RightCtrl"),  # es la de mantener
+        ("atajo.traducir", "<Control><Alt>space"),  # es la de alternar
+        ("traduccion.idioma", ""),
+        ("traduccion.idioma", "   "),
+        ("traduccion.idioma", "x"),
+        ("traduccion.idioma", "a" * 41),
+        ("traduccion.idioma", "inglés\nfrancés"),
+        ("traduccion.idioma", 5),
     ],
 )
 def test_rechaza_valores_invalidos_y_deja_el_anterior(
@@ -168,6 +185,7 @@ def test_cargar_arma_la_foto_de_los_ajustes(ajustes: AjustesRepo) -> None:
     assert foto.atajos() == {
         AccionDeAtajo.MANTENER: "F9",
         AccionDeAtajo.ALTERNAR: "<Control><Alt>space",
+        AccionDeAtajo.TRADUCIR: "RightAlt",  # la tercera tecla (lote 6)
     }
     assert (foto.modelo, foto.hilos, foto.idioma, foto.dispositivo) == ("small", 4, None, None)
 
@@ -222,3 +240,61 @@ def test_dos_atajos_iguales_se_rechazan_juntos(ajustes: AjustesRepo) -> None:
         ajustes.establecer_atajos("<Control><Alt>d", "<Control><Alt>d")
 
     assert ajustes.obtener("atajo.mantener") == "RightCtrl"
+
+
+# ---- la tecla de traducir y el idioma de destino (lote 6) -------------------------------------------------
+
+
+def test_los_tres_atajos_se_cambian_juntos(ajustes: AjustesRepo) -> None:
+    ajustes.establecer_atajos("F9", "<Control><Alt>d", "F10")
+
+    assert ajustes.obtener("atajo.mantener") == "F9"
+    assert ajustes.obtener("atajo.alternar") == "<Control><Alt>d"
+    assert ajustes.obtener("atajo.traducir") == "F10"
+
+
+def test_sin_indicar_la_de_traducir_se_conserva_la_que_habia(ajustes: AjustesRepo) -> None:
+    ajustes.establecer("atajo.traducir", "F10")
+
+    ajustes.establecer_atajos("F9", "<Control><Alt>d")
+
+    assert ajustes.obtener("atajo.traducir") == "F10"
+
+
+def test_los_tres_atajos_tienen_que_ser_distintos(ajustes: AjustesRepo) -> None:
+    with pytest.raises(DatoInvalido, match="distint"):
+        ajustes.validar_atajos("F9", "<Control><Alt>d", "F9")
+    with pytest.raises(DatoInvalido, match="distint"):
+        ajustes.validar_atajos("F9", "<Control><Alt>d", "<Control><Alt>d")
+
+
+def test_si_uno_de_los_tres_falla_no_se_guarda_ninguno(ajustes: AjustesRepo) -> None:
+    with pytest.raises(DatoInvalido):
+        ajustes.establecer_atajos("F9", "<Control><Alt>d", "TeclaQueNoExiste")
+
+    assert ajustes.obtener("atajo.mantener") == "RightCtrl"
+    assert ajustes.obtener("atajo.traducir") == "RightAlt"
+
+
+def test_la_foto_incluye_la_tecla_y_el_idioma_de_traduccion(ajustes: AjustesRepo) -> None:
+    ajustes.establecer("traduccion.idioma", "portugués")
+
+    foto = ajustes.cargar()
+
+    assert foto.atajos()[AccionDeAtajo.TRADUCIR] == "RightAlt"
+    assert foto.idioma_de_traduccion == "portugués"
+
+
+def test_el_idioma_de_destino_se_guarda_sin_espacios_sobrantes(ajustes: AjustesRepo) -> None:
+    ajustes.establecer("traduccion.idioma", "  francés ")
+
+    assert ajustes.obtener("traduccion.idioma") == "francés"
+
+
+def test_se_puede_cambiar_la_tecla_de_traducir_solo_para_esta_ejecucion(
+    ajustes: AjustesRepo,
+) -> None:
+    foto = ajustes.cargar().con_atajos(mantener=None, alternar=None, traducir="F11")
+
+    assert foto.atajo_traducir == "F11" and foto.atajo_mantener == "RightCtrl"
+    assert ajustes.obtener("atajo.traducir") == "RightAlt"

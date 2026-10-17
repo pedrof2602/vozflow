@@ -202,3 +202,41 @@ def test_una_direccion_invalida_de_ollama_se_rechaza(qtbot: QtBot) -> None:
     pagina.guardar()
 
     assert pagina.hay_error is True and "dirección" in pagina.mensaje
+
+
+# ---- idioma de destino de la traducción (lote 6) ---------------------------------------------------------
+
+
+def test_muestra_el_idioma_de_destino_y_ofrece_sugerencias(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    sugerencias = [pagina.combo_idioma.itemText(i) for i in range(pagina.combo_idioma.count())]
+
+    assert pagina.combo_idioma.currentText() == "inglés"
+    assert {"inglés", "español", "portugués", "francés", "alemán", "italiano"} <= set(sugerencias)
+    assert pagina.combo_idioma.isEditable()  # se puede escribir cualquier otro
+
+
+def test_guardar_graba_el_idioma_escrito_a_mano(qtbot: QtBot) -> None:
+    pagina, gestion, _ = _pagina(qtbot)
+    pagina.combo_idioma.setCurrentText("japonés")
+
+    pagina.guardar()
+
+    assert gestion.idioma_de_traduccion() == "japonés"
+
+
+def test_un_idioma_vacio_se_rechaza_con_un_aviso(qtbot: QtBot) -> None:
+    pagina, gestion, _ = _pagina(qtbot)
+    pagina.combo_idioma.setCurrentText("  ")
+
+    pagina.guardar()
+
+    assert pagina.hay_error is True and "idioma" in pagina.mensaje.lower()
+    assert gestion.idioma_de_traduccion() == "inglés"
+
+
+def test_explica_que_la_traduccion_usa_el_mismo_servicio(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    assert "tecla de traducir" in pagina.aclaracion_de_traduccion.text().lower()

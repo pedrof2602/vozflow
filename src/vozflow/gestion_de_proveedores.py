@@ -55,6 +55,9 @@ class GestionDeProveedores:
     def reescritura_encendida(self) -> bool:
         return bool(self._ajustes.obtener("reescritura.activa"))
 
+    def idioma_de_traduccion(self) -> str:
+        return str(self._ajustes.obtener("traduccion.idioma"))
+
     def proveedor_activo(self) -> Proveedor | None:
         return self._proveedores.activo()
 
@@ -78,6 +81,12 @@ class GestionDeProveedores:
             self._proveedores.configurar(
                 id_, modelo=modelo, direccion=direccion, tiempo_maximo_s=tiempo_maximo_s
             )
+        except DatoInvalido as error:
+            raise ErrorDeProveedor(str(error)) from None
+
+    def establecer_idioma_de_traduccion(self, idioma: str) -> None:
+        try:
+            self._ajustes.establecer("traduccion.idioma", idioma)
         except DatoInvalido as error:
             raise ErrorDeProveedor(str(error)) from None
 

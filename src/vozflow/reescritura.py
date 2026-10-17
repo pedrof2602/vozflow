@@ -37,6 +37,9 @@ class ResultadoReescritura:
     proveedor: str = ""
     """Quién reescribió; vacío si el texto quedó como estaba."""
     aviso: str | None = None
+    fallo: bool = False
+    """Se pidió reescribir o traducir y no se pudo. Reescribir tolera el fallo (se inserta el
+    texto limpio); traducir no: saldría en el idioma equivocado."""
 
 
 def crear_reescritor(proveedor: Proveedor, clave: str | None) -> Reescritor:
@@ -63,35 +66,67 @@ class ReescrituraDeBase:
         self._claves = claves
         self._crear = crear
 
-    def intentar(self, texto: str, modo: Modo) -> ResultadoReescritura:
-        if not modo.reescribir or not self._ajustes.obtener("reescritura.activa"):
+    def intentar(
+        self, texto: str, modo: Modo, traducir_a: str | None = None
+    ) -> ResultadoReescritura:
+        """Reescribe (si el modo lo pide) o traduce (si se pidió con la tecla de traducir)."""
+        traduciendo = traducir_a is not None
+        if not traduciendo and not modo.reescribir:
             return ResultadoReescritura(texto)  # nada que hacer: ni siquiera se prepara un cliente
+        if not self._ajustes.obtener("reescritura.activa"):
+            if not traduciendo:
+                return ResultadoReescritura(texto)
+            return self._sin_cambios(
+                texto,
+                "La traducción necesita la reescritura encendida (Ajustes → Reescritura)",
+                traduciendo=True,
+            )
         proveedor = self._proveedores.activo()
         if proveedor is None:
-            return self._sin_cambios(texto, "La reescritura está activada pero no hay un proveedor")
+            return self._sin_cambios(
+                texto,
+                "La reescritura está activada pero no hay un proveedor",
+                traduciendo=traduciendo,
+            )
         try:
             clave = self._clave_de(proveedor)
         except (LlaveroNoDisponible, ValueError) as error:
-            return self._sin_cambios(texto, str(error))
+            return self._sin_cambios(texto, str(error), traduciendo=traduciendo)
         if clave is None and proveedor.id != "ollama":
             return self._sin_cambios(
-                texto, f"Falta la clave de {proveedor.id}: guardala con «proveedor clave»"
+                texto,
+                f"Falta la clave de {proveedor.id}: guardala con «proveedor clave»",
+                traduciendo=traduciendo,
             )
         try:
             reescritor = self._crear(proveedor, clave)
             palabras = [e.palabra for e in self._diccionario.listar()]
-            instruccion = armar_instruccion(modo, palabras)
+            instruccion = armar_instruccion(modo, palabras, traducir_a)
             reescrito = reescritor.reescribir(texto, instruccion, proveedor.tiempo_maximo_s)
         except ReescrituraFallida as error:
-            return self._sin_cambios(texto, str(error))
+            return self._sin_cambios(texto, str(error), traduciendo=traduciendo)
         except Exception:
             _registro.exception("Falló la reescritura de forma inesperada")
-            return self._sin_cambios(texto, "La reescritura falló")
+            return self._sin_cambios(
+                texto, "La traducción falló" if traduciendo else "La reescritura falló",
+                traduciendo=traduciendo,
+            )  # fmt: skip
         return ResultadoReescritura(reescrito, proveedor.id)
 
     def _clave_de(self, proveedor: Proveedor) -> str | None:
         return None if proveedor.id == "ollama" else self._claves.leer(proveedor.id)
 
     @staticmethod
-    def _sin_cambios(texto: str, motivo: str) -> ResultadoReescritura:
-        return ResultadoReescritura(texto, aviso=f"{motivo}. Se insertó el texto sin reescribir.")
+    def _sin_cambios(texto: str, motivo: str, *, traduciendo: bool) -> ResultadoReescritura:
+        if traduciendo:
+            return ResultadoReescritura(
+                texto,
+                aviso=(
+                    f"No se pudo traducir: {motivo}. No se insertó nada; "
+                    "el texto quedó en el historial."
+                ),
+                fallo=True,
+            )
+        return ResultadoReescritura(
+            texto, aviso=f"{motivo}. Se insertó el texto sin reescribir.", fallo=True
+        )

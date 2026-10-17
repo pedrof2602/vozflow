@@ -20,6 +20,7 @@ from vozflow.atajos.puerto import (
 from vozflow.servicio_dbus import InstanciaYaEnEjecucion
 
 M, A = AccionDeAtajo.MANTENER, AccionDeAtajo.ALTERNAR
+T = AccionDeAtajo.TRADUCIR
 ATAJOS = {M: "RightCtrl", A: "<Control><Alt>space"}
 
 
@@ -223,7 +224,7 @@ def test_no_se_puede_iniciar_dos_veces_y_se_puede_volver_a_iniciar_tras_detener(
 # ---- la configuración por defecto ----------------------------------------------------------------------------------------
 
 
-def test_crear_escucha_arma_gnome_para_alternar_y_evdev_para_mantener() -> None:
+def test_crear_escucha_arma_gnome_para_alternar_y_evdev_para_mantener_y_traducir() -> None:
     escucha = crear_escucha()
 
     assert isinstance(escucha, EscuchaCompuesta)
@@ -231,4 +232,52 @@ def test_crear_escucha_arma_gnome_para_alternar_y_evdev_para_mantener() -> None:
         accion: [f().__class__.__name__ for f in fabricas]
         for accion, fabricas in escucha.candidatas.items()
     }
-    assert nombres == {A: ["EscuchaDeGnome"], M: ["EscuchaEvdev"]}
+    assert nombres == {A: ["EscuchaDeGnome"], M: ["EscuchaEvdev"], T: ["EscuchaEvdev"]}
+
+
+# ---- traducir (lote 6) ----------------------------------------------------------------------------
+
+
+def test_crear_escucha_tambien_lee_la_tecla_de_traducir_con_evdev() -> None:
+    escucha = crear_escucha()
+
+    nombres = {
+        accion: [f().__class__.__name__ for f in fabricas]
+        for accion, fabricas in escucha.candidatas.items()
+    }
+    assert nombres[T] == ["EscuchaEvdev"]
+
+
+def test_las_acciones_que_comparten_tecnica_arrancan_una_sola_escucha() -> None:
+    registro: list[str] = []
+    evdev = EscuchaQueAvisa(registro, "evdev")
+    compartidas = [_fabrica(evdev)]
+    escucha = EscuchaCompuesta({M: compartidas, T: compartidas, A: [_fabrica(EscuchaFalsa())]})
+
+    escucha.iniciar({M: "RightCtrl", T: "RightAlt", A: "<Control><Alt>space"}, lambda _: None)
+
+    assert registro.count("iniciar evdev") == 1
+    assert evdev.atajos == {M: "RightCtrl", T: "RightAlt"}
+
+
+def test_si_falta_una_de_las_acciones_del_grupo_arranca_con_las_que_hay() -> None:
+    registro: list[str] = []
+    evdev = EscuchaQueAvisa(registro, "evdev")
+    compartidas = [_fabrica(evdev)]
+    escucha = EscuchaCompuesta({M: compartidas, T: compartidas})
+
+    escucha.iniciar({M: "RightCtrl"}, lambda _: None)
+
+    assert evdev.atajos == {M: "RightCtrl"}
+
+
+def test_el_respaldo_de_un_grupo_se_prueba_entero() -> None:
+    registro: list[str] = []
+    roto = EscuchaQueFalla(SinTeclados("no hay"), registro, "primero")
+    bueno = EscuchaQueAvisa(registro, "segundo")
+    compartidas = [_fabrica(roto), _fabrica(bueno)]
+    escucha = EscuchaCompuesta({M: compartidas, T: compartidas})
+
+    escucha.iniciar({M: "RightCtrl", T: "RightAlt"}, lambda _: None)
+
+    assert bueno.atajos == {M: "RightCtrl", T: "RightAlt"}

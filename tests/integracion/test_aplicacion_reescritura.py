@@ -1,11 +1,15 @@
 """La reescritura dentro del dictado, con dobles (T110): apagada por defecto y nunca estorba."""
 
+from collections.abc import Callable
+
 import httpx
 import pytest
 
 from tests.dobles import ReescritorFalso
-from tests.integracion.test_aplicacion import Montaje, _dictar_mantenido
+from tests.integracion.test_aplicacion import Montaje, _dictar_mantenido, _esperar
+from vozflow.atajos.puerto import AccionDeAtajo
 from vozflow.configuracion import ConfiguracionDeBase
+from vozflow.dominio.dictado import EstadoDelDictado as E
 from vozflow.llm.anthropic import ReescritorAnthropic
 from vozflow.llm.puerto import Reescritor
 from vozflow.persistencia.ajustes import AjustesRepo
@@ -69,6 +73,14 @@ class Entorno:
     def dictar(self) -> str:
         _dictar_mantenido(self.montaje)
         return self.montaje.insertor.insertados[-1][0]
+
+    def dictar_traduciendo(self) -> None:
+        """Mantiene y suelta la tecla de traducir; devuelve cuando el dictado terminó."""
+        m = self.montaje
+        m.escucha.pulsar(AccionDeAtajo.TRADUCIR)
+        assert m.espera_estado(E.ESCUCHANDO)
+        m.escucha.soltar(AccionDeAtajo.TRADUCIR)
+        assert _esperar(lambda: m.app.estado in (E.INACTIVO, E.ERROR))
 
     def cerrar(self) -> None:
         self.montaje.app.detener()
@@ -296,3 +308,158 @@ def test_el_modelo_vacio_no_deja_activar(crear) -> None:  # type: ignore[no-unty
 
     with pytest.raises(DatoInvalido):
         e.proveedores.activar("anthropic")
+
+
+# ---- la tecla de traducir (lote 6) ---------------------------------------------------------------------
+
+
+def test_la_tecla_de_traducir_inserta_la_traduccion_aunque_el_modo_no_reescriba(crear) -> None:  # type: ignore[no-untyped-def]
+    e = crear(reescritor=ReescritorFalso("Hello, world."))
+    e.encender(en_el_modo=False)  # el modo General NO tiene «reescribir»
+
+    e.dictar_traduciendo()
+
+    assert [t for t, _ in e.montaje.insertor.insertados] == ["Hello, world."]
+
+
+def test_la_instruccion_pide_traducir_al_idioma_de_los_ajustes(crear) -> None:  # type: ignore[no-untyped-def]
+    e = crear(reescritor=ReescritorFalso("Olá, mundo."))
+    e.encender(en_el_modo=False)
+    e.ajustes.establecer("traduccion.idioma", "portugués")
+
+    e.dictar_traduciendo()
+
+    texto, instruccion, tiempo = e.reescritor.llamadas[0]
+    assert texto == "Hola mundo." and tiempo == 9
+    assert "portugués" in instruccion and "traduc" in instruccion.lower()
+
+
+def test_el_historial_marca_la_traduccion_con_su_proveedor(crear) -> None:  # type: ignore[no-untyped-def]
+    e = crear(texto="eh hola mundo", reescritor=ReescritorFalso("Hello, world."))
+    e.encender(en_el_modo=False)
+
+    e.dictar_traduciendo()
+
+    (dictado,) = e.historial.listar()
+    assert dictado.reescrito is True and dictado.proveedor == "anthropic"
+    assert dictado.texto_crudo == "eh hola mundo" and dictado.texto_final == "Hello, world."
+
+
+def test_las_otras_dos_teclas_no_traducen(crear) -> None:  # type: ignore[no-untyped-def]
+    e = crear(reescritor=ReescritorFalso("Hello, world."))
+    e.encender(en_el_modo=False)
+
+    assert e.dictar() == "Hola mundo."
+    assert e.reescritor.llamadas == []
+
+
+def test_los_atajos_de_texto_se_expanden_despues_de_traducir(crear) -> None:  # type: ignore[no-untyped-def]
+    from vozflow.persistencia.atajos_texto_repo import AtajosTextoRepo
+
+    e = crear(texto="gracias mi firma", reescritor=_EnMayusculas())
+    e.encender(en_el_modo=False)
+    AtajosTextoRepo(e.base).agregar("mi firma", "Pedro Freimeyer")
+
+    e.dictar_traduciendo()
+
+    assert e.montaje.insertor.insertados[-1][0] == "GRACIAS Pedro Freimeyer"
+    assert "Pedro" not in e.reescritor.recibidos[0]
+
+
+def test_en_una_terminal_la_traduccion_sale_en_una_sola_linea(crear) -> None:  # type: ignore[no-untyped-def]
+    from vozflow.ventana.puerto import InfoVentana
+
+    e = crear(
+        reescritor=ReescritorFalso("First line.\nSecond line."),
+        ventana=InfoVentana("ptyxis", "t", 1),
+    )
+    e.encender(en_el_modo=False)
+
+    e.dictar_traduciendo()
+
+    assert e.montaje.insertor.insertados[-1][0] == "First line. Second line."
+
+
+# ---- cuando no se puede traducir: nada en el idioma equivocado (RF-033, RF-034) ------------------------
+
+
+def _sin_insertar_y_en_el_historial(e: Entorno) -> None:
+    assert e.montaje.insertor.insertados == []
+    (dictado,) = e.historial.listar()
+    assert dictado.estado == "no_insertado" and dictado.texto_final == "Hola mundo."
+    assert dictado.reescrito is False
+    assert e.montaje.app.estado is E.ERROR
+    assert e.montaje.sin_insertar == ["Hola mundo."]
+
+
+@pytest.mark.parametrize(
+    "motivo",
+    [
+        "No se pudo conectar con Anthropic",
+        "Anthropic no respondió a tiempo",
+        "Anthropic rechazó la clave de acceso",
+    ],
+)
+def test_si_la_traduccion_falla_no_se_inserta_nada_y_el_texto_queda_en_el_historial(
+    crear: Callable[..., Entorno], motivo: str
+) -> None:
+    e = crear(reescritor=ReescritorFalso(fallo=motivo))
+    e.encender(en_el_modo=False)
+
+    e.dictar_traduciendo()
+
+    _sin_insertar_y_en_el_historial(e)
+    assert any(motivo in aviso for aviso in e.montaje.avisos)
+    assert any("traduc" in aviso.lower() for aviso in e.montaje.avisos)
+
+
+def test_con_la_reescritura_apagada_la_tecla_de_traducir_no_manda_nada_y_avisa(crear) -> None:  # type: ignore[no-untyped-def]
+    e = crear(reescritor=ReescritorFalso("Hello."))
+
+    e.dictar_traduciendo()
+
+    _sin_insertar_y_en_el_historial(e)
+    assert e.fabricados == []  # ni siquiera se arma un cliente de red
+    assert any("reescritura" in aviso.lower() for aviso in e.montaje.avisos)
+
+
+def test_con_el_interruptor_general_apagado_tampoco_se_traduce(crear) -> None:  # type: ignore[no-untyped-def]
+    e = crear(reescritor=ReescritorFalso("Hello."))
+    e.encender(en_el_modo=False)
+    e.ajustes.establecer("reescritura.activa", False)
+
+    e.dictar_traduciendo()
+
+    _sin_insertar_y_en_el_historial(e)
+    assert e.fabricados == []
+
+
+def test_sin_clave_guardada_no_se_traduce_y_se_avisa(crear) -> None:  # type: ignore[no-untyped-def]
+    e = crear(claves=ClavesFalsas(), reescritor=ReescritorFalso("Hello."))
+    e.encender(en_el_modo=False)
+
+    e.dictar_traduciendo()
+
+    _sin_insertar_y_en_el_historial(e)
+    assert any("clave" in aviso.lower() for aviso in e.montaje.avisos)
+
+
+def test_con_ollama_se_traduce_sin_clave(crear) -> None:  # type: ignore[no-untyped-def]
+    e = crear(claves=ClavesFalsas(), reescritor=ReescritorFalso("Hello."))
+    e.encender("ollama", en_el_modo=False)
+
+    e.dictar_traduciendo()
+
+    assert e.montaje.insertor.insertados[-1][0] == "Hello."
+
+
+def test_despues_de_un_fallo_se_puede_volver_a_dictar(crear) -> None:  # type: ignore[no-untyped-def]
+    e = crear(reescritor=ReescritorFalso(fallo="sin red"))
+    e.encender(en_el_modo=False)
+    e.dictar_traduciendo()
+    assert isinstance(e.reescritor, ReescritorFalso)
+    e.reescritor.fallo = None
+
+    e.dictar_traduciendo()
+
+    assert e.montaje.insertor.insertados[-1][0] == "Texto reescrito."

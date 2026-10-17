@@ -136,3 +136,31 @@ def test_al_detenerse_se_olvidan_las_teclas_apretadas() -> None:
     despachador.emitir(M, P)
 
     assert [e.fase for e in recibidos] == [P, P]
+
+
+# ---- traducir: se comporta como mantener ---------------------------------------------------
+
+
+def test_traducir_deja_pasar_pulsar_y_luego_soltar() -> None:
+    filtro = FiltroDeRepeticion()
+
+    assert _pasa(filtro, AccionDeAtajo.TRADUCIR, P) is True
+    assert _pasa(filtro, AccionDeAtajo.TRADUCIR, S) is True
+
+
+def test_traducir_ignora_las_repeticiones_y_los_soltar_de_mas() -> None:
+    filtro = FiltroDeRepeticion()
+    assert _pasa(filtro, AccionDeAtajo.TRADUCIR, S) is False
+    assert _pasa(filtro, AccionDeAtajo.TRADUCIR, P) is True
+
+    assert _pasa(filtro, AccionDeAtajo.TRADUCIR, P) is False
+    assert _pasa(filtro, AccionDeAtajo.TRADUCIR, S) is True
+
+
+def test_las_tres_acciones_no_se_interfieren() -> None:
+    filtro = FiltroDeRepeticion()
+
+    assert _pasa(filtro, M, P) and _pasa(filtro, AccionDeAtajo.TRADUCIR, P)
+    assert _pasa(filtro, A, P)
+    assert _pasa(filtro, AccionDeAtajo.TRADUCIR, S) and _pasa(filtro, M, S)
+    assert _pasa(filtro, A, S) is False

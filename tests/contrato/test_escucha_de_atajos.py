@@ -26,8 +26,10 @@ from vozflow.atajos.puerto import (
 from vozflow.servicio_dbus import ServicioDBus
 
 M, A = AccionDeAtajo.MANTENER, AccionDeAtajo.ALTERNAR
+T = AccionDeAtajo.TRADUCIR
 P, S = FaseDeAtajo.PULSADO, FaseDeAtajo.SOLTADO
 ATAJOS = {M: "RightCtrl", A: "<Control><Alt>space"}
+ATAJOS_CON_TRADUCIR = {**ATAJOS, T: "RightAlt"}
 
 
 @dataclass
@@ -75,7 +77,21 @@ def _teclas_de_evdev(
         )
         escucha.bombear()
 
-    return {M: (pulsar_mantener, soltar_mantener), A: (pulsar_alternar, soltar_alternar)}
+    def pulsar_traducir() -> None:
+        teclado.enviar((ecodes.KEY_RIGHTALT, abajo))
+        escucha.bombear()
+        reloj.ahora += 0.3
+        escucha.bombear()
+
+    def soltar_traducir() -> None:
+        teclado.enviar((ecodes.KEY_RIGHTALT, arriba))
+        escucha.bombear()
+
+    return {
+        M: (pulsar_mantener, soltar_mantener),
+        A: (pulsar_alternar, soltar_alternar),
+        T: (pulsar_traducir, soltar_traducir),
+    }
 
 
 def _evdev() -> Montaje:
@@ -106,17 +122,18 @@ def _compuesta() -> Montaje:
         return servicios[-1]
 
     gnome = EscuchaDeGnome(atajo=AtajoDeGnome(ejecutar=gsettings), crear_servicio=crear_servicio)
-    escucha = EscuchaCompuesta({A: [lambda: gnome], M: [lambda: evdev]})
+    por_evdev = [lambda: evdev]  # la misma lista: mantener y traducir comparten una escucha
+    escucha = EscuchaCompuesta({A: [lambda: gnome], M: por_evdev, T: por_evdev})
 
     def pulsar(accion: AccionDeAtajo) -> None:
-        if accion is M:
-            teclas[M][0]()
+        if accion is not A:
+            teclas[accion][0]()
         else:  # lo que hace `dbus-send` cuando GNOME detecta el atajo
             servicios[-1]._atender(llamada_toggle(sin_respuesta=True))
 
     def soltar(accion: AccionDeAtajo) -> None:
-        if accion is M:
-            teclas[M][1]()  # el atajo de GNOME no avisa al soltar: no hay nada que simular
+        if accion is not A:
+            teclas[accion][1]()  # el atajo de GNOME no avisa al soltar: no hay nada que simular
 
     def ocupar(atajo: str) -> None:
         gsettings.precargar("org.gnome.desktop.wm.keybindings", "otra-funcion", f"['{atajo}']")
@@ -141,7 +158,7 @@ def montaje(request: pytest.FixtureRequest) -> Iterator[Montaje]:
 
 
 def _iniciar(montaje: Montaje) -> None:
-    montaje.escucha.iniciar(ATAJOS, montaje.recibidos.append)
+    montaje.escucha.iniciar(ATAJOS_CON_TRADUCIR, montaje.recibidos.append)
 
 
 # ---- mantener ------------------------------------------------------------------------------
@@ -250,3 +267,44 @@ def test_una_combinacion_ya_usada_por_otra_funcion_es_atajo_ocupado(montaje: Mon
 
     with pytest.raises(AtajoOcupado, match="Control"):
         _iniciar(montaje)
+
+
+# ---- traducir: una tercera acción de mantener ----------------------------------------------------------
+
+
+def test_traducir_entrega_pulsado_y_despues_soltado(montaje: Montaje) -> None:
+    _iniciar(montaje)
+
+    montaje.pulsar(T)
+    montaje.soltar(T)
+
+    assert montaje.recibidos == [EventoDeAtajo(T, P), EventoDeAtajo(T, S)]
+
+
+def test_traducir_ignora_la_repeticion_de_la_tecla_apretada(montaje: Montaje) -> None:
+    _iniciar(montaje)
+
+    montaje.pulsar(T)
+    montaje.pulsar(T)
+    montaje.soltar(T)
+
+    assert montaje.recibidos == [EventoDeAtajo(T, P), EventoDeAtajo(T, S)]
+
+
+def test_las_tres_acciones_conviven_sin_mezclarse(montaje: Montaje) -> None:
+    _iniciar(montaje)
+
+    montaje.pulsar(T)
+    montaje.soltar(T)
+    montaje.pulsar(M)
+    montaje.soltar(M)
+    montaje.pulsar(A)
+    montaje.soltar(A)
+
+    assert montaje.recibidos == [
+        EventoDeAtajo(T, P),
+        EventoDeAtajo(T, S),
+        EventoDeAtajo(M, P),
+        EventoDeAtajo(M, S),
+        EventoDeAtajo(A, P),
+    ]

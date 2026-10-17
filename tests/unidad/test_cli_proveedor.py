@@ -295,3 +295,34 @@ def test_probar_sin_clave_guardada_lo_dice(b: Banco, capsys: pytest.CaptureFixtu
 
     assert b.correr("proveedor", "probar", "anthropic") == CODIGO_ERROR
     assert "clave" in capsys.readouterr().err
+
+
+# ---- traducción (lote 6) ------------------------------------------------------------------------------
+
+
+def test_el_idioma_de_destino_se_ve_y_se_cambia_por_consola(
+    b: Banco, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert b.correr("proveedor", "idioma") == CODIGO_OK
+    assert "inglés" in capsys.readouterr().out
+
+    assert b.correr("proveedor", "idioma", "portugués") == CODIGO_OK
+    assert b.ajustes().obtener("traduccion.idioma") == "portugués"
+    b.correr("proveedor", "idioma")
+    assert "portugués" in capsys.readouterr().out
+
+
+def test_un_idioma_invalido_por_consola_es_un_error(
+    b: Banco, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert b.correr("proveedor", "idioma", "x") == CODIGO_ERROR
+    assert "idioma" in capsys.readouterr().err
+    assert b.ajustes().obtener("traduccion.idioma") == "inglés"
+
+
+def test_el_listado_muestra_el_idioma_de_destino(
+    b: Banco, capsys: pytest.CaptureFixture[str]
+) -> None:
+    b.correr("proveedor", "listar")
+
+    assert "inglés" in capsys.readouterr().out

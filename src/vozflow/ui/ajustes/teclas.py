@@ -131,6 +131,7 @@ class PaginaTeclas(QWidget):
         self.hay_error = False
         self.campo_mantener = CampoDeAtajo(permitir_modificador_solo=True)
         self.campo_alternar = CampoDeAtajo(permitir_modificador_solo=False)
+        self.campo_traducir = CampoDeAtajo(permitir_modificador_solo=True)
         self._etiqueta = QLabel()
         self._etiqueta.setWordWrap(True)
         aplicar = QPushButton("Aplicar")
@@ -140,6 +141,7 @@ class PaginaTeclas(QWidget):
         formulario = QFormLayout(self)
         formulario.addRow("Mantener para hablar", self.campo_mantener)
         formulario.addRow("Pulsar para empezar y terminar", self.campo_alternar)
+        formulario.addRow("Mantener para hablar y traducir", self.campo_traducir)
         botones = QHBoxLayout()
         botones.addWidget(aplicar)
         botones.addWidget(restablecer)
@@ -150,20 +152,21 @@ class PaginaTeclas(QWidget):
     def aplicar(self) -> None:
         """Valida, prueba las teclas nuevas en la escucha en vivo y recién entonces las guarda."""
         try:
-            mantener, alternar = self._ajustes.validar_atajos(
-                self.campo_mantener.atajo, self.campo_alternar.atajo
+            nuevos = self._ajustes.validar_atajos(
+                self.campo_mantener.atajo, self.campo_alternar.atajo, self.campo_traducir.atajo
             )
-            actuales = (
-                self._ajustes.obtener("atajo.mantener"),
-                self._ajustes.obtener("atajo.alternar"),
-            )
-            if (mantener, alternar) == actuales:
+            if nuevos == self._actuales():
                 self._avisar("No hay cambios que aplicar.", error=False)
                 return
+            mantener, alternar, traducir = nuevos
             self._aplicar_en_vivo(
-                {AccionDeAtajo.MANTENER: mantener, AccionDeAtajo.ALTERNAR: alternar}
+                {
+                    AccionDeAtajo.MANTENER: mantener,
+                    AccionDeAtajo.ALTERNAR: alternar,
+                    AccionDeAtajo.TRADUCIR: traducir,
+                }
             )
-            self._ajustes.establecer_atajos(mantener, alternar)
+            self._ajustes.establecer_atajos(mantener, alternar, traducir)
         except (DatoInvalido, *_ERRORES_DE_LA_ESCUCHA) as error:
             self._avisar(str(error), error=True)
             return
@@ -173,11 +176,21 @@ class PaginaTeclas(QWidget):
     def restablecer(self) -> None:
         self.campo_mantener.atajo = self._ajustes.defecto("atajo.mantener")
         self.campo_alternar.atajo = self._ajustes.defecto("atajo.alternar")
+        self.campo_traducir.atajo = self._ajustes.defecto("atajo.traducir")
         self.aplicar()
 
+    def _actuales(self) -> tuple[str, str, str]:
+        return (
+            self._ajustes.obtener("atajo.mantener"),
+            self._ajustes.obtener("atajo.alternar"),
+            self._ajustes.obtener("atajo.traducir"),
+        )
+
     def _mostrar_actuales(self) -> None:
-        self.campo_mantener.atajo = self._ajustes.obtener("atajo.mantener")
-        self.campo_alternar.atajo = self._ajustes.obtener("atajo.alternar")
+        mantener, alternar, traducir = self._actuales()
+        self.campo_mantener.atajo = mantener
+        self.campo_alternar.atajo = alternar
+        self.campo_traducir.atajo = traducir
 
     def _avisar(self, texto: str, *, error: bool) -> None:
         self.mensaje, self.hay_error = texto, error

@@ -65,7 +65,9 @@ def arrancar_interfaz(
     base = dependencias.abrir_base()
     try:
         repo = AjustesRepo(base)
-        ajustes = repo.cargar().con_atajos(argumentos.mantener, argumentos.alternar)
+        ajustes = repo.cargar().con_atajos(
+            argumentos.mantener, argumentos.alternar, argumentos.traducir
+        )
         grabadora = dependencias.crear_grabadora()
         insertor = servicio.crear_insertor()
         interfaz: InterfazGrafica | None = None
@@ -113,6 +115,7 @@ def arrancar_interfaz(
             ajustes=repo,
             contexto=contexto,
             nivel=lambda: float(getattr(grabadora, "nivel", 0.0)),
+            destino_de_traduccion=lambda: aplicacion.idioma_en_curso,
         )
         instancia.pedido_de_mostrar.connect(lambda: interfaz.mostrar_ajustes("Teclas"))
         reloj_de_senales = _atender_ctrl_c(interfaz.salir)  # que no se libere mientras corre Qt

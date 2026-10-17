@@ -15,6 +15,7 @@ from vozflow.ui.ajustes.teclas import CampoDeAtajo, PaginaTeclas, nombre_de_modi
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 M, A = AccionDeAtajo.MANTENER, AccionDeAtajo.ALTERNAR
+T = AccionDeAtajo.TRADUCIR
 
 # códigos de tecla del servidor gráfico (xcb) = código de evdev + 8
 XCB_CTRL_DERECHO, XCB_CTRL_IZQUIERDO, XCB_ALT_IZQUIERDO = 97 + 8, 29 + 8, 56 + 8
@@ -198,7 +199,7 @@ def test_aplicar_cambia_los_atajos_en_vivo_y_los_guarda(qtbot: QtBot) -> None:
 
     pagina.aplicar()
 
-    assert aplicador.recibidos == [{M: "F9", A: "<Control><Alt>d"}]
+    assert aplicador.recibidos == [{M: "F9", A: "<Control><Alt>d", T: "RightAlt"}]
     assert ajustes.obtener("atajo.mantener") == "F9"
     assert ajustes.obtener("atajo.alternar") == "<Control><Alt>d"
     assert "aplicaron" in pagina.mensaje.lower()
@@ -254,7 +255,7 @@ def test_restablecer_vuelve_a_los_valores_de_fabrica(qtbot: QtBot) -> None:
     pagina.restablecer()
 
     assert ajustes.obtener("atajo.mantener") == "RightCtrl"
-    assert aplicador.recibidos[-1] == {M: "RightCtrl", A: "<Control><Alt>space"}
+    assert aplicador.recibidos[-1] == {M: "RightCtrl", A: "<Control><Alt>space", T: "RightAlt"}
     assert pagina.campo_mantener.atajo == "RightCtrl"
 
 
@@ -264,3 +265,52 @@ def test_aplicar_sin_cambios_no_toca_la_escucha(qtbot: QtBot) -> None:
     pagina.aplicar()
 
     assert aplicador.recibidos == []
+
+
+# ---- la tecla de traducir (lote 6) ----------------------------------------------------------------------
+
+
+def test_muestra_la_tecla_de_traducir(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    assert pagina.campo_traducir.atajo == "RightAlt"
+
+
+def test_cambiar_la_de_traducir_se_aplica_en_vivo_y_se_guarda(qtbot: QtBot) -> None:
+    pagina, ajustes, aplicador = _pagina(qtbot)
+    pagina.campo_traducir.atajo = "F10"
+
+    pagina.aplicar()
+
+    assert aplicador.recibidos[-1][T] == "F10"
+    assert ajustes.obtener("atajo.traducir") == "F10"
+
+
+def test_la_de_traducir_no_puede_repetir_otra_tecla(qtbot: QtBot) -> None:
+    pagina, ajustes, aplicador = _pagina(qtbot)
+    pagina.campo_traducir.atajo = "RightCtrl"  # es la de mantener
+
+    pagina.aplicar()
+
+    assert pagina.hay_error is True and "distint" in pagina.mensaje
+    assert aplicador.recibidos == [] and ajustes.obtener("atajo.traducir") == "RightAlt"
+
+
+def test_si_la_de_traducir_choca_con_otra_funcion_avisa_y_no_guarda(qtbot: QtBot) -> None:
+    pagina, ajustes, aplicador = _pagina(qtbot)
+    aplicador.error = AtajoOcupado("F10 ya lo usa la función «x» de GNOME")
+    pagina.campo_traducir.atajo = "F10"
+
+    pagina.aplicar()
+
+    assert pagina.hay_error is True and ajustes.obtener("atajo.traducir") == "RightAlt"
+
+
+def test_la_de_traducir_acepta_un_modificador_solo(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    _apretar_y_soltar(
+        pagina.campo_traducir, Qt.Key.Key_Shift, Qt.KeyboardModifier.ShiftModifier, 62
+    )  # Shift derecho
+
+    assert pagina.campo_traducir.atajo == "RightShift"

@@ -229,7 +229,11 @@ class Controlador:
         self.salidas += 1
 
 
-def _interfaz(qtbot: QtBot, nivel: Callable[[], float] = lambda: 0.0):  # type: ignore[no-untyped-def]
+def _interfaz(  # type: ignore[no-untyped-def]
+    qtbot: QtBot,
+    nivel: Callable[[], float] = lambda: 0.0,
+    destino: Callable[[], str | None] = lambda: None,
+):
     from tests.dobles import ReescritorFalso
     from tests.unidad.test_gestion_de_proveedores import Claves
     from tests.unidad.test_ventana_ajustes import Insertor, Portapapeles
@@ -251,6 +255,7 @@ def _interfaz(qtbot: QtBot, nivel: Callable[[], float] = lambda: 0.0):  # type: 
         ajustes=AjustesRepo(base),
         contexto=contexto,
         nivel=nivel,
+        destino_de_traduccion=destino,
         bandeja_disponible=lambda: False,
         intervalo_de_nivel_ms=10,
     )
@@ -360,3 +365,19 @@ def test_salir_deja_que_la_ventana_se_cierre_para_que_qt_pueda_terminar(qtbot: Q
     interfaz.ventana.closeEvent(evento)
     # Si la ventana siguiera ignorando el cierre, Qt cancelaría el quit() y el programa no terminaría.
     assert evento.isAccepted() and controlador.salidas == 1
+
+
+def test_el_indicador_muestra_el_idioma_cuando_la_sesion_es_de_traduccion(qtbot: QtBot) -> None:
+    interfaz, _ = _interfaz(qtbot, destino=lambda: "inglés")
+
+    interfaz.puente.estado.emit(E.ESCUCHANDO)
+
+    assert "inglés" in interfaz.indicador.texto
+
+
+def test_si_no_hay_traduccion_el_indicador_queda_como_siempre(qtbot: QtBot) -> None:
+    interfaz, _ = _interfaz(qtbot, destino=lambda: None)
+
+    interfaz.puente.estado.emit(E.ESCUCHANDO)
+
+    assert "→" not in interfaz.indicador.texto
