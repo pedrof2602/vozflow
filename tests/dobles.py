@@ -2,10 +2,13 @@
 
 import contextlib
 import os
+import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final
 
+import numpy as np
+import numpy.typing as npt
 from evdev import InputEvent, ecodes
 
 from vozflow.atajos.puerto import (
@@ -16,7 +19,9 @@ from vozflow.atajos.puerto import (
     FaseDeAtajo,
 )
 from vozflow.audio.senal import Audio
+from vozflow.insercion.puerto import Destino, ResultadoInsercion
 from vozflow.transcripcion.motor import ErrorDeTranscripcion, Transcripcion, validar_audio
+from vozflow.ventana.puerto import InfoVentana
 
 _MENSAJE_NO_CARGADO: Final = "El motor no está cargado"
 
@@ -184,3 +189,56 @@ class GSettingsFalso:
     @staticmethod
     def _por_defecto(clave: str) -> str:
         return "@as []" if clave == "custom-keybindings" else "''"
+
+
+class GrabadoraFalsa:
+    """Captura que «graba» una senoide de la duración pedida; cumple ``Grabadora``."""
+
+    def __init__(self, segundos: float = 1.5, amplitud: float = 0.3) -> None:
+        self.segundos = segundos
+        self.amplitud = amplitud
+        self.iniciadas = 0
+        self.detenidas = 0
+        self.fallar_al_iniciar: Exception | None = None
+
+    def _audio(self) -> npt.NDArray[np.int16]:
+        t = np.arange(int(16000 * self.segundos)) / 16000
+        return (np.sin(2 * np.pi * 440 * t) * self.amplitud * 32767).astype(np.int16)
+
+    def iniciar(self, dispositivo: str | int | None = None) -> None:
+        if self.fallar_al_iniciar is not None:
+            raise self.fallar_al_iniciar
+        self.iniciadas += 1
+
+    def audio_acumulado(self) -> npt.NDArray[np.int16]:
+        return self._audio()
+
+    def detener_crudo(self) -> npt.NDArray[np.int16]:
+        self.detenidas += 1
+        return self._audio()
+
+
+class InsertorFalso:
+    def __init__(self, resultado: ResultadoInsercion | None = None) -> None:
+        self.resultado = resultado or ResultadoInsercion.exito()
+        self.insertados: list[tuple[str, Destino]] = []
+
+    def insertar(self, texto: str, destino: Destino) -> ResultadoInsercion:
+        self.insertados.append((texto, destino))
+        return self.resultado
+
+
+class VentanaFalsa:
+    def __init__(self, ventana: InfoVentana | None = None) -> None:
+        self.ventana = ventana
+        self.consultas = 0
+        self.liberar = threading.Event()
+        self.liberar.set()  # por defecto contesta al instante
+        self.error: Exception | None = None
+
+    def consultar(self) -> InfoVentana | None:
+        self.consultas += 1
+        self.liberar.wait(5)
+        if self.error is not None:
+            raise self.error
+        return self.ventana

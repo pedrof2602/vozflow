@@ -1,23 +1,33 @@
-"""Une las piezas de vozflow. Por ahora, el dictado de una sola vez para la línea de comandos."""
+"""Une las piezas de vozflow: el dictado de la línea de comandos y la ``Aplicacion``."""
 
 import logging
+import threading
 import time
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Collection, Mapping
+from concurrent.futures import Future
+from concurrent.futures import TimeoutError as EsperaAgotada
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 import numpy as np
 import numpy.typing as npt
 
+from vozflow.atajos.puerto import AccionDeAtajo, EscuchaDeAtajos, EventoDeAtajo, FaseDeAtajo
+from vozflow.audio.captura import ErrorDeAudio
 from vozflow.audio.senal import FRECUENCIA
+from vozflow.dominio.comandos_voz import SaltoDeLinea
+from vozflow.dominio.dictado import EstadoDelDictado, EstadoDictado, Evento
+from vozflow.dominio.terminales import es_terminal
 from vozflow.dominio.tuberia import (
     OPCIONES_POR_DEFECTO,
     OpcionesDeTuberia,
     ResultadoProceso,
     procesar,
 )
-from vozflow.transcripcion.motor import MotorDeTranscripcion, Transcripcion
+from vozflow.insercion.puerto import Destino, Insertor
+from vozflow.transcripcion.motor import ErrorDeTranscripcion, MotorDeTranscripcion, Transcripcion
 from vozflow.transcripcion.por_tramos import TranscriptorPorTramos
+from vozflow.ventana.puerto import InfoVentana, VentanaActiva
 
 _registro = logging.getLogger(__name__)
 
@@ -162,3 +172,201 @@ def dictar_hasta(
         opciones=opciones,
         al_empezar=al_empezar,
     )
+
+
+ARRANQUE_MAXIMO_MS = 150
+"""Si empezar a grabar tarda más, la primera palabra se puede perder: habría que pre-grabar."""
+_ESPERA_DE_LA_VENTANA_S = 0.1
+_ESPERA_AL_DETENER_S = 15.0
+
+_EVENTOS = {
+    (AccionDeAtajo.MANTENER, FaseDeAtajo.PULSADO): Evento.PULSAR,
+    (AccionDeAtajo.MANTENER, FaseDeAtajo.SOLTADO): Evento.SOLTAR,
+    (AccionDeAtajo.ALTERNAR, FaseDeAtajo.PULSADO): Evento.ALTERNAR,
+}
+
+
+class Aplicacion:
+    """Del atajo al texto insertado. Cada dictado corre en su propio hilo; los atajos llegan desde
+    el hilo de la escucha y solo cambian el estado, sin bloquearse.
+
+    Privacidad: ni el texto dictado ni el título de la ventana se registran jamás.
+    """
+
+    def __init__(
+        self,
+        *,
+        escucha: EscuchaDeAtajos,
+        grabadora: Grabadora,
+        motor: MotorDeTranscripcion,
+        ventana: VentanaActiva,
+        insertor: Insertor,
+        atajos: Mapping[AccionDeAtajo, str],
+        opciones: OpcionesDeTuberia = OPCIONES_POR_DEFECTO,
+        aplicaciones_terminal: Collection[str] = (),
+        al_cambiar_estado: Callable[[EstadoDelDictado], None] | None = None,
+        al_aviso: Callable[[str], None] | None = None,
+        al_texto_sin_insertar: Callable[[str], None] | None = None,
+    ) -> None:
+        self._escucha = escucha
+        self._grabadora = grabadora
+        self._motor = motor
+        self._ventana = ventana
+        self._insertor = insertor
+        self._atajos = dict(atajos)
+        self._opciones = opciones
+        self._aplicaciones_terminal = frozenset(aplicaciones_terminal)
+        self._al_cambiar_estado = al_cambiar_estado
+        self._al_aviso = al_aviso
+        self._al_texto_sin_insertar = al_texto_sin_insertar
+        self._candado = threading.RLock()
+        self._dictado = EstadoDictado(al_cambiar=self._publicar)
+        self._fin_de_grabacion = threading.Event()
+        self._hilo: threading.Thread | None = None
+        self._por_mantener = False
+        self._cancelado = False
+        self._inicio_s = 0.0
+        self._ventana_consultada: Future[InfoVentana | None] | None = None
+        self.texto_sin_insertar: str | None = None
+        self.ultimo_arranque_ms: int | None = None
+
+    @property
+    def estado(self) -> EstadoDelDictado:
+        return self._dictado.estado
+
+    # ---- ciclo de vida -----------------------------------------------------------------------
+
+    def iniciar(self) -> None:
+        """Carga el modelo (una sola vez) y empieza a escuchar los atajos."""
+        self._motor.cargar()
+        self._cancelado = False
+        self._escucha.iniciar(self._atajos, self._al_atajo)
+
+    def detener(self) -> None:
+        self._escucha.detener()
+        with self._candado:
+            self._cancelado = True
+            if self._dictado.estado is EstadoDelDictado.ESCUCHANDO:
+                self._dictado.manejar(Evento.ALTERNAR)
+            self._fin_de_grabacion.set()
+            hilo = self._hilo
+        if hilo is not None and hilo is not threading.current_thread():
+            hilo.join(timeout=_ESPERA_AL_DETENER_S)
+        self._motor.descargar()
+
+    # ---- atajos ------------------------------------------------------------------------------
+
+    def _al_atajo(self, evento: EventoDeAtajo) -> None:
+        traducido = _EVENTOS.get((evento.accion, evento.fase))
+        if traducido is None:
+            return
+        with self._candado:
+            if self._cancelado:
+                return
+            escuchando = self._dictado.estado is EstadoDelDictado.ESCUCHANDO
+            if traducido is Evento.SOLTAR and escuchando and not self._por_mantener:
+                return  # se empezó con «alternar»: soltar la otra tecla no corta nada
+            if not self._dictado.manejar(traducido):
+                return
+            if self._dictado.estado is EstadoDelDictado.ESCUCHANDO:
+                self._empezar(por_mantener=traducido is Evento.PULSAR)
+            elif escuchando:
+                self._fin_de_grabacion.set()
+
+    def _empezar(self, *, por_mantener: bool) -> None:
+        self._por_mantener = por_mantener
+        self._inicio_s = time.perf_counter()
+        self._fin_de_grabacion.clear()
+        self._ventana_consultada = self._consultar_ventana()
+        self._hilo = threading.Thread(target=self._dictar, name="vozflow-dictado", daemon=True)
+        self._hilo.start()
+
+    def _consultar_ventana(self) -> Future[InfoVentana | None]:
+        futuro: Future[InfoVentana | None] = Future()
+
+        def tarea() -> None:
+            try:
+                futuro.set_result(self._ventana.consultar())
+            except Exception:
+                _registro.debug("No se pudo consultar la ventana activa")
+                futuro.set_result(None)
+
+        threading.Thread(target=tarea, name="vozflow-ventana", daemon=True).start()
+        return futuro
+
+    # ---- un dictado --------------------------------------------------------------------------
+
+    def _dictar(self) -> None:
+        try:
+            resultado = dictar_hasta(
+                grabadora=self._grabadora,
+                motor=self._motor,
+                seguir=lambda: not self._fin_de_grabacion.is_set(),
+                esperar=self._esperar_el_fin,
+                al_empezar=self._al_empezar,
+            )
+            self._insertar(resultado.transcripcion)
+        except Exception as error:
+            self._fallar(_mensaje_del_fallo(error))
+
+    def _esperar_el_fin(self, segundos: float) -> None:
+        self._fin_de_grabacion.wait(segundos)
+
+    def _al_empezar(self) -> None:
+        self.ultimo_arranque_ms = round((time.perf_counter() - self._inicio_s) * 1000)
+        if self.ultimo_arranque_ms > ARRANQUE_MAXIMO_MS:
+            _registro.warning(
+                "Empezar a grabar tardó %d ms: la primera palabra podría perderse",
+                self.ultimo_arranque_ms,
+            )
+
+    def _insertar(self, transcripcion: Transcripcion) -> None:
+        ventana = self._ventana_activa()
+        salto: SaltoDeLinea = "conservar"
+        if ventana is not None and es_terminal(ventana.aplicacion, self._aplicaciones_terminal):
+            salto = "espacio"
+        opciones = (
+            replace(self._opciones, salto_de_linea=salto) if salto == "espacio" else self._opciones
+        )
+        procesado = procesar(transcripcion.texto, transcripcion.idioma or None, opciones)
+        if self._cancelado or procesado.descartar or not procesado.texto.strip():
+            self._evento(Evento.SIN_VOZ)
+            return
+        self._evento(Evento.TEXTO_LISTO)
+        resultado = self._insertor.insertar(procesado.texto, Destino(salto_de_linea=salto))
+        if resultado.insertado:
+            self._evento(Evento.INSERTADO)
+            return
+        self.texto_sin_insertar = procesado.texto
+        if self._al_texto_sin_insertar is not None:
+            self._al_texto_sin_insertar(procesado.texto)
+        self._fallar(resultado.motivo or "No se pudo insertar el texto")
+
+    def _ventana_activa(self) -> InfoVentana | None:
+        futuro = self._ventana_consultada
+        if futuro is None:
+            return None
+        try:
+            return futuro.result(timeout=_ESPERA_DE_LA_VENTANA_S)
+        except EsperaAgotada:
+            return None
+
+    def _fallar(self, mensaje: str) -> None:
+        self._evento(Evento.FALLO)
+        if self._al_aviso is not None:
+            self._al_aviso(mensaje)
+
+    def _evento(self, evento: Evento) -> None:
+        with self._candado:
+            self._dictado.manejar(evento)
+
+    def _publicar(self, anterior: EstadoDelDictado, nuevo: EstadoDelDictado) -> None:
+        if self._al_cambiar_estado is not None:
+            self._al_cambiar_estado(nuevo)
+
+
+def _mensaje_del_fallo(error: Exception) -> str:
+    if isinstance(error, ErrorDeTranscripcion | ErrorDeAudio):
+        return str(error)  # estos mensajes están pensados para mostrarse tal cual
+    _registro.exception("Falló un dictado")
+    return f"Falló el dictado ({type(error).__name__})"
