@@ -278,9 +278,10 @@ def test_dictar_con_cero_segundos_o_negativos_se_rechaza() -> None:
         assert salida.value.code == 2
 
 
-def test_sin_subcomando_muestra_la_ayuda() -> None:
+def test_una_orden_desconocida_es_un_error_de_uso() -> None:
+    # Sin ninguna orden arranca el servicio (ver test_servicio.py); una orden inventada no.
     with pytest.raises(SystemExit) as salida:
-        main([], _dependencias(GrabadoraFalsa(), MotorFalso()))
+        main(["bailar"], _dependencias(GrabadoraFalsa(), MotorFalso()))
 
     assert salida.value.code == 2
 
