@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterator
 import pytest
 
 from tests.dobles import EscuchaFalsa, GrabadoraFalsa, InsertorFalso, MotorFalso, VentanaFalsa
-from vozflow.aplicacion import Aplicacion, RegistroDeDictados
+from vozflow.aplicacion import Aplicacion, Reescritura, RegistroDeDictados
 from vozflow.atajos.puerto import AccionDeAtajo
 from vozflow.configuracion import ConfiguracionEstatica, FuenteDeConfiguracion
 from vozflow.dominio.dictado import EstadoDelDictado as E
@@ -39,6 +39,7 @@ class Montaje:
         resultado: ResultadoInsercion | None = None,
         configuracion: FuenteDeConfiguracion | None = None,
         historial: RegistroDeDictados | None = None,
+        reescritura: Reescritura | None = None,
     ) -> None:
         self.escucha = EscuchaFalsa()
         self.grabadora = GrabadoraFalsa(segundos)
@@ -60,6 +61,7 @@ class Montaje:
             al_texto_sin_insertar=self.sin_insertar.append,
             configuracion=configuracion,
             historial=historial,
+            reescritura=reescritura,
         )
 
     def espera_estado(self, estado: E) -> bool:

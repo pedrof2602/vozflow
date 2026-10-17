@@ -46,10 +46,18 @@ def procesar(
         texto = limpiar(texto, idioma)
     if opciones.puntuacion_automatica:
         texto = normalizar_puntuacion(texto, idioma)
+    return ResultadoProceso(texto=completar(texto, opciones))
+
+
+def completar(texto: str, opciones: OpcionesDeTuberia) -> str:
+    """Los últimos pasos: expandir los atajos de texto y respetar el destino de una sola línea.
+
+    Va aparte para poder reescribir con un modelo entre la puntuación y este paso: así el
+    reemplazo de un atajo llega tal cual lo escribió la persona, sin pasar por el modelo.
+    """
     if opciones.atajos:
-        # Al final, para que el reemplazo llegue tal cual lo escribió la persona.
         texto = expandir(texto, opciones.atajos)
     if opciones.salto_de_linea == "espacio":
         # Un destino que ejecutaría el texto (una terminal) nunca recibe un salto de línea.
         texto = texto.replace("\n", " ")
-    return ResultadoProceso(texto=texto)
+    return texto

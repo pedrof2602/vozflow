@@ -7,25 +7,51 @@ en ``ErrorDeComando`` y el que llama decide cómo mostrarlos.
 import argparse
 import sqlite3
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from vozflow.dominio.historial import Dictado
 from vozflow.dominio.modos import SALTOS_DE_LINEA, TIPOS_DE_PEGADO
+from vozflow.dominio.reescritura import PROVEEDORES, Proveedor
+from vozflow.llm.puerto import ReescrituraFallida
+from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.asignaciones_repo import AsignacionesRepo
 from vozflow.persistencia.atajos_texto_repo import AtajosTextoRepo
+from vozflow.persistencia.claves import PROVEEDORES_CON_CLAVE
 from vozflow.persistencia.copia_repo import CopiaRepo
 from vozflow.persistencia.diccionario_repo import DiccionarioRepo
 from vozflow.persistencia.historial import HistorialRepo
 from vozflow.persistencia.modos_repo import ModosRepo
+from vozflow.persistencia.proveedores_repo import ProveedoresRepo
+from vozflow.reescritura import FabricaDeReescritor
 
 ORDENES_DE_DATOS = frozenset(
-    {"diccionario", "atajos", "modos", "asignar", "historial", "exportar", "importar"}
+    {"diccionario", "atajos", "modos", "asignar", "historial", "exportar", "importar", "proveedor"}
 )
 _RESUMEN_MAXIMO = 60
 
 Argumentos = argparse.Namespace
 Base = sqlite3.Connection
 Salida = Callable[[str], None]
+
+
+class AlmacenDeClaves(Protocol):
+    def guardar(self, proveedor: str, clave: str) -> None: ...
+    def leer(self, proveedor: str) -> str | None: ...
+    def existe(self, proveedor: str) -> bool: ...
+    def borrar(self, proveedor: str) -> bool: ...
+
+
+@dataclass
+class Contexto:
+    """Lo que necesitan las órdenes además de la base; las pruebas lo reemplazan por dobles."""
+
+    base: sqlite3.Connection
+    salida: Callable[[str], None]
+    leer_clave: Callable[[str], str]
+    claves: AlmacenDeClaves
+    crear_reescritor: FabricaDeReescritor
 
 
 class ErrorDeComando(Exception):
@@ -86,6 +112,24 @@ def registrar(ordenes: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     borrar.add_argument("id", type=int)
     acciones.add_parser("borrar-todo", help="borra todo el historial")
 
+    proveedor = ordenes.add_parser("proveedor", help="reescritura con un modelo de lenguaje")
+    acciones = proveedor.add_subparsers(dest="accion", required=True, metavar="acción")
+    acciones.add_parser("listar", help="muestra los proveedores y si la reescritura está encendida")
+    configurar = acciones.add_parser("configurar", help="elige modelo, tiempo máximo o dirección")
+    configurar.add_argument("id", choices=PROVEEDORES)
+    configurar.add_argument("--modelo")
+    configurar.add_argument("--tiempo", type=int, metavar="SEGUNDOS", help="entre 3 y 60")
+    configurar.add_argument("--direccion", help="solo Ollama")
+    clave = acciones.add_parser("clave", help="guarda la clave en el llavero (se pide por teclado)")
+    clave.add_argument("id", choices=PROVEEDORES)
+    borrar_clave = acciones.add_parser("borrar-clave", help="borra la clave del llavero")
+    borrar_clave.add_argument("id", choices=PROVEEDORES)
+    activar = acciones.add_parser("activar", help="enciende la reescritura con este proveedor")
+    activar.add_argument("id", choices=PROVEEDORES)
+    acciones.add_parser("desactivar", help="apaga la reescritura")
+    probar = acciones.add_parser("probar", help="prueba la conexión con un texto de ejemplo")
+    probar.add_argument("id", nargs="?", choices=PROVEEDORES)
+
     exportar = ordenes.add_parser(
         "exportar", help="guarda diccionario, atajos y modos en un archivo"
     )
@@ -94,9 +138,11 @@ def registrar(ordenes: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     importar.add_argument("archivo", type=Path)
 
 
-def ejecutar(
-    argumentos: argparse.Namespace, base: sqlite3.Connection, salida: Callable[[str], None] = print
-) -> int:
+def ejecutar(argumentos: argparse.Namespace, contexto: Contexto) -> int:
+    base, salida = contexto.base, contexto.salida
+    if argumentos.orden == "proveedor":
+        _proveedor(argumentos, contexto)
+        return 0
     orden = {
         "diccionario": _diccionario,
         "atajos": _atajos,
@@ -260,3 +306,84 @@ def _importar(a: Argumentos, base: Base, salida: Salida) -> None:
         f"Se importó: {resumen.diccionario} palabras, {resumen.atajos_de_texto} atajos de texto, "
         f"{resumen.modos} modos y {resumen.asignaciones} asignaciones."
     )
+
+
+# ---- reescritura con un modelo de lenguaje -------------------------------------------------------
+
+_TEXTO_DE_PRUEBA = "hola mundo esto es una prueba"
+_INSTRUCCION_DE_PRUEBA = "Corregí la puntuación y las mayúsculas. Devolvé solo el texto."
+
+
+def _proveedor(a: Argumentos, ctx: Contexto) -> None:
+    proveedores, ajustes = ProveedoresRepo(ctx.base), AjustesRepo(ctx.base)
+    salida = ctx.salida
+    if a.accion == "listar":
+        encendida = ajustes.obtener("reescritura.activa")
+        salida(f"Reescritura: {'encendida' if encendida else 'apagada'}")
+        for p in proveedores.listar():
+            salida(_linea_de_proveedor(p, ctx))
+    elif a.accion == "configurar":
+        proveedores.configurar(
+            a.id, modelo=a.modelo, direccion=a.direccion, tiempo_maximo_s=a.tiempo
+        )
+        salida(f"Configurado {a.id}.")
+    elif a.accion == "clave":
+        if a.id not in PROVEEDORES_CON_CLAVE:
+            raise ErrorDeComando(f"El proveedor «{a.id}» no usa clave")
+        ctx.claves.guardar(a.id, ctx.leer_clave(f"Clave de {a.id} (no se muestra): "))
+        salida(f"Clave de {a.id} guardada en el llavero.")
+    elif a.accion == "borrar-clave":
+        if not ctx.claves.borrar(a.id):
+            raise ErrorDeComando(f"No había una clave de {a.id} guardada")
+        salida(f"Clave de {a.id} borrada.")
+    elif a.accion == "activar":
+        _exigir_listo(proveedores.obtener(a.id), ctx)
+        proveedores.activar(a.id)
+        ajustes.establecer("reescritura.activa", True)
+        salida(f"Reescritura encendida con {a.id}.")
+    elif a.accion == "desactivar":
+        proveedores.desactivar()
+        ajustes.establecer("reescritura.activa", False)
+        salida("Reescritura apagada.")
+    else:
+        _probar(a.id, proveedores, ctx)
+
+
+def _linea_de_proveedor(p: Proveedor, ctx: Contexto) -> str:
+    partes = [p.id, f"modelo={p.modelo or '—'}", f"tiempo={p.tiempo_maximo_s} s"]
+    if p.id == "ollama":
+        partes.append(f"dirección={p.direccion}")
+    else:
+        partes.append(f"clave guardada: {_si_no(ctx.claves.existe(p.id))}")
+    if p.activo:
+        partes.append("(activo)")
+    return "  ".join(partes)
+
+
+def _exigir_listo(p: Proveedor, ctx: Contexto) -> str | None:
+    """Comprueba que se pueda usar y devuelve su clave (``None`` para Ollama)."""
+    if not p.modelo:
+        raise ErrorDeComando(
+            f"Elegí un modelo para {p.id} antes de usarlo: proveedor configurar {p.id} --modelo …"
+        )
+    if p.id == "ollama":
+        return None
+    clave = ctx.claves.leer(p.id)
+    if not clave:
+        raise ErrorDeComando(f"Falta la clave de {p.id}: guardala con «proveedor clave {p.id}»")
+    return clave
+
+
+def _probar(id_: str | None, proveedores: ProveedoresRepo, ctx: Contexto) -> None:
+    proveedor = proveedores.obtener(id_) if id_ else proveedores.activo()
+    if proveedor is None:
+        raise ErrorDeComando("Indicá un proveedor o activá uno: proveedor probar ID")
+    clave = _exigir_listo(proveedor, ctx)
+    reescritor = ctx.crear_reescritor(proveedor, clave)
+    try:
+        resultado = reescritor.reescribir(
+            _TEXTO_DE_PRUEBA, _INSTRUCCION_DE_PRUEBA, proveedor.tiempo_maximo_s
+        )
+    except ReescrituraFallida as error:
+        raise ErrorDeComando(str(error)) from None
+    ctx.salida(f"Funciona ({proveedor.id}): {resultado}")

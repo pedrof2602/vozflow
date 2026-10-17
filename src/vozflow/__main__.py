@@ -1,6 +1,7 @@
 """Línea de comandos de vozflow: ``python -m vozflow <orden>``."""
 
 import argparse
+import getpass
 import logging
 import signal
 import sqlite3
@@ -26,8 +27,10 @@ from vozflow.insercion.puerto import Insertor
 from vozflow.medicion import FRASES_DE_PRUEBA, ejecutar_medicion
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.base import abrir_base
+from vozflow.persistencia.claves import Claves, LlaveroNoDisponible
 from vozflow.persistencia.errores import DatoInvalido
 from vozflow.persistencia.historial import HistorialRepo
+from vozflow.reescritura import FabricaDeReescritor, ReescrituraDeBase, crear_reescritor
 from vozflow.registro import configurar_registro
 from vozflow.servicio_dbus import InstanciaYaEnEjecucion
 from vozflow.transcripcion.faster_whisper import MODELO_POR_DEFECTO
@@ -50,6 +53,9 @@ class Dependencias:
     esperar: Callable[[float], None]
     descargar_modelo: Callable[[str], str]
     abrir_base: Callable[[], sqlite3.Connection] = abrir_base
+    leer_clave: Callable[[str], str] = getpass.getpass
+    claves: Callable[[], cli.AlmacenDeClaves] = Claves
+    crear_reescritor: FabricaDeReescritor = crear_reescritor
     entrada: Callable[[str], str] = input
     salida: Callable[[str], None] = print
 
@@ -256,7 +262,14 @@ def _hacer_diagnostico() -> list[Comprobacion]:
 def _orden_de_datos(argumentos: argparse.Namespace, dependencias: Dependencias) -> int:
     base = dependencias.abrir_base()
     try:
-        return cli.ejecutar(argumentos, base, dependencias.salida)
+        contexto = cli.Contexto(
+            base=base,
+            salida=dependencias.salida,
+            leer_clave=dependencias.leer_clave,
+            claves=dependencias.claves(),
+            crear_reescritor=dependencias.crear_reescritor,
+        )
+        return cli.ejecutar(argumentos, contexto)
     finally:
         base.close()
 
@@ -293,6 +306,9 @@ def _orden_servicio(
             dispositivo=argumentos.dispositivo or ajustes.dispositivo,
             configuracion=ConfiguracionDeBase(base),
             historial=HistorialRepo(base, activo=lambda: bool(repo.obtener("historial.activo"))),
+            reescritura=ReescrituraDeBase(
+                base, dependencias.claves(), dependencias.crear_reescritor
+            ),
             al_cambiar_estado=lambda estado: _avisar(_TEXTO_DEL_ESTADO[estado]),
             al_aviso=lambda mensaje: _avisar(f"Aviso: {mensaje}"),
             # Lo dictado se muestra solo si no se pudo insertar, para que no se pierda.
@@ -340,6 +356,7 @@ def main(
         return _orden_servicio(argumentos, dependencias, servicio or servicio_real())
     except (
         cli.ErrorDeComando,
+        LlaveroNoDisponible,
         DatoInvalido,
         CopiaInvalida,
         ErrorDeAudio,

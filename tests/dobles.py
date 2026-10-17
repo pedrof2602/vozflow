@@ -242,3 +242,21 @@ class VentanaFalsa:
         if self.error is not None:
             raise self.error
         return self.ventana
+
+
+class ReescritorFalso:
+    """``Reescritor`` que no toca la red: devuelve un texto fijo o falla de la forma pedida."""
+
+    def __init__(self, resultado: str = "Texto reescrito.", fallo: str | None = None) -> None:
+        from vozflow.llm.puerto import ReescrituraFallida  # evita un ciclo al importar
+
+        self.resultado = resultado
+        self.fallo = fallo
+        self.llamadas: list[tuple[str, str, int]] = []
+        self._error = ReescrituraFallida
+
+    def reescribir(self, texto: str, instruccion: str, tiempo_maximo_s: int) -> str:
+        self.llamadas.append((texto, instruccion, tiempo_maximo_s))
+        if self.fallo is not None:
+            raise self._error(self.fallo)
+        return self.resultado
