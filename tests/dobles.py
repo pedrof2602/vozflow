@@ -77,6 +77,7 @@ class EscuchaFalsa:
     def __init__(self) -> None:
         self._despachador: Despachador | None = None
         self._ocupados: set[str] = set()
+        self.atajos_actuales: dict[AccionDeAtajo, str] = {}
 
     def ocupar(self, atajo: str) -> None:
         """Hace que otra función del escritorio ya use esta combinación."""
@@ -91,6 +92,7 @@ class EscuchaFalsa:
             if atajo in self._ocupados:
                 raise AtajoOcupado(f"{atajo} ya lo usa otra función del escritorio")
         self._despachador = Despachador(al_evento)
+        self.atajos_actuales = dict(atajos)
 
     def detener(self) -> None:
         if self._despachador is not None:

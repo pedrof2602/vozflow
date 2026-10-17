@@ -3,6 +3,7 @@
 import argparse
 import getpass
 import logging
+import os
 import signal
 import sqlite3
 import sys
@@ -10,6 +11,7 @@ import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from vozflow import cli
 from vozflow.aplicacion import Aplicacion, Grabadora, dictar_una_vez
@@ -18,11 +20,14 @@ from vozflow.atajos.evdev import SinPermisoDeTeclado, SinTeclados
 from vozflow.atajos.gsettings import ErrorDeGSettings
 from vozflow.atajos.puerto import AtajoOcupado, EscuchaDeAtajos
 from vozflow.audio.captura import ErrorDeAudio
+from vozflow.autoinicio import activar_autoinicio, autoinicio_activo, desactivar_autoinicio
 from vozflow.configuracion import ConfiguracionDeBase
 from vozflow.diagnostico import Comprobacion, ejecutar_diagnostico, formatear, sondas_reales
 from vozflow.dominio.copia import CopiaInvalida
 from vozflow.dominio.dictado import EstadoDelDictado
 from vozflow.dominio.tuberia import OpcionesDeTuberia
+from vozflow.escritorio import argumentos_de_inicio
+from vozflow.gestion_de_proveedores import AlmacenDeClaves
 from vozflow.insercion.puerto import Insertor
 from vozflow.medicion import FRASES_DE_PRUEBA, ejecutar_medicion
 from vozflow.persistencia.ajustes import AjustesRepo
@@ -54,7 +59,7 @@ class Dependencias:
     descargar_modelo: Callable[[str], str]
     abrir_base: Callable[[], sqlite3.Connection] = abrir_base
     leer_clave: Callable[[str], str] = getpass.getpass
-    claves: Callable[[], cli.AlmacenDeClaves] = Claves
+    claves: Callable[[], AlmacenDeClaves] = Claves
     crear_reescritor: FabricaDeReescritor = crear_reescritor
     entrada: Callable[[str], str] = input
     salida: Callable[[str], None] = print
@@ -139,7 +144,9 @@ def _crear_parser() -> argparse.ArgumentParser:
         description="Dictado por voz local. Sin orden, arranca el servicio que escucha los atajos.",
     )
     parser.add_argument(
-        "--sin-interfaz", action="store_true", help="sin ventanas ni bandeja (por ahora, siempre)"
+        "--sin-interfaz",
+        action="store_true",
+        help="solo el servicio de atajos, sin ventanas ni bandeja",
     )
     parser.add_argument("--mantener", help="tecla para mantener y hablar (por defecto RightCtrl)")
     parser.add_argument(
@@ -189,6 +196,11 @@ def _crear_parser() -> argparse.ArgumentParser:
     descarga.add_argument("--modelo", default=MODELO_POR_DEFECTO)
 
     cli.registrar(ordenes)
+
+    autoinicio = ordenes.add_parser(
+        "autoinicio", help="arrancar vozflow al iniciar la sesión (opcional)"
+    )
+    autoinicio.add_argument("accion", choices=["activar", "desactivar", "estado"])
 
     ordenes.add_parser(
         "diagnostico", help="revisa qué tiene este escritorio para atajos e inserción de texto"
@@ -274,6 +286,25 @@ def _orden_de_datos(argumentos: argparse.Namespace, dependencias: Dependencias) 
         base.close()
 
 
+def _orden_autoinicio(argumentos: argparse.Namespace, dependencias: Dependencias) -> int:
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    if argumentos.accion == "activar":
+        try:
+            archivo = activar_autoinicio(config, argumentos_de_inicio())
+        except FileExistsError as error:
+            raise cli.ErrorDeComando(str(error)) from None
+        dependencias.salida(f"vozflow arrancará con la sesión ({archivo}).")
+    elif argumentos.accion == "desactivar":
+        desactivar_autoinicio(config)
+        dependencias.salida("vozflow ya no arranca con la sesión.")
+    else:
+        dependencias.salida(
+            "El inicio automático está "
+            + ("activado." if autoinicio_activo(config) else "desactivado.")
+        )
+    return CODIGO_OK
+
+
 def _orden_diagnostico() -> int:
     print(formatear(_hacer_diagnostico()))
     return CODIGO_OK
@@ -332,10 +363,20 @@ def _orden_servicio(
     return CODIGO_OK
 
 
+Interfaz = Callable[[argparse.Namespace, Dependencias], int]
+
+
+def _interfaz_real(argumentos: argparse.Namespace, dependencias: Dependencias) -> int:
+    from vozflow.ui.lanzador import arrancar_interfaz  # Qt solo se carga si se abre la interfaz
+
+    return arrancar_interfaz(argumentos, dependencias, servicio_real())
+
+
 def main(
     argv: Sequence[str] | None = None,
     dependencias: Dependencias | None = None,
     servicio: DependenciasDelServicio | None = None,
+    interfaz: Interfaz | None = None,
 ) -> int:
     """Ejecuta una orden y devuelve el código de salida."""
     if dependencias is None:
@@ -353,7 +394,11 @@ def main(
             return _orden_diagnostico()
         if argumentos.orden in cli.ORDENES_DE_DATOS:
             return _orden_de_datos(argumentos, dependencias)
-        return _orden_servicio(argumentos, dependencias, servicio or servicio_real())
+        if argumentos.orden == "autoinicio":
+            return _orden_autoinicio(argumentos, dependencias)
+        if argumentos.sin_interfaz:
+            return _orden_servicio(argumentos, dependencias, servicio or servicio_real())
+        return (interfaz or _interfaz_real)(argumentos, dependencias)
     except (
         cli.ErrorDeComando,
         LlaveroNoDisponible,

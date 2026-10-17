@@ -8,7 +8,7 @@ import pytest
 
 from tests.dobles import EscuchaFalsa, GrabadoraFalsa, InsertorFalso, MotorFalso, VentanaFalsa
 from vozflow.aplicacion import Aplicacion, Reescritura, RegistroDeDictados
-from vozflow.atajos.puerto import AccionDeAtajo
+from vozflow.atajos.puerto import AccionDeAtajo, AtajoOcupado
 from vozflow.configuracion import ConfiguracionEstatica, FuenteDeConfiguracion
 from vozflow.dominio.dictado import EstadoDelDictado as E
 from vozflow.dominio.tuberia import procesar
@@ -488,3 +488,71 @@ def test_la_pista_se_lee_en_cada_dictado_y_no_solo_al_arrancar() -> None:
         assert [c.pista for c in montaje.motor.llamadas] == ["uno", "uno, dos"]
     finally:
         montaje.app.detener()
+
+
+# ---- cambiar las teclas sin reiniciar (RF-029) ---------------------------------------------------------
+
+
+def test_reconfigurar_los_atajos_rige_enseguida(m: Montaje) -> None:
+    m.app.reconfigurar_atajos({M: "F9", A: "<Control><Alt>d"})
+
+    assert m.escucha.atajos_actuales == {M: "F9", A: "<Control><Alt>d"}
+    _dictar_mantenido(m)  # y la escucha nueva sigue entregando eventos
+    assert len(m.insertor.insertados) == 1
+
+
+def test_si_los_atajos_nuevos_chocan_queda_la_configuracion_anterior(m: Montaje) -> None:
+    m.escucha.ocupar("F9")
+
+    with pytest.raises(AtajoOcupado):
+        m.app.reconfigurar_atajos({M: "F9", A: "<Control><Alt>space"})
+
+    assert m.escucha.atajos_actuales == ATAJOS
+    _dictar_mantenido(m)
+    assert len(m.insertor.insertados) == 1
+
+
+def test_no_se_reconfigura_en_medio_de_un_dictado(m: Montaje) -> None:
+    m.escucha.pulsar(M)
+    assert m.espera_estado(E.ESCUCHANDO)
+
+    with pytest.raises(RuntimeError, match="dictado"):
+        m.app.reconfigurar_atajos({M: "F9", A: "<Control><Alt>d"})
+
+    assert m.escucha.atajos_actuales == ATAJOS
+    m.escucha.soltar(M)
+
+
+# ---- pausa desde la bandeja ----------------------------------------------------------------------------
+
+
+def test_en_pausa_los_atajos_no_hacen_nada(m: Montaje) -> None:
+    m.app.pausar(True)
+
+    m.escucha.pulsar(M)
+    m.escucha.soltar(M)
+    m.escucha.pulsar(A)
+    m.escucha.soltar(A)
+    time.sleep(0.15)
+
+    assert m.app.estado is E.INACTIVO and m.grabadora.iniciadas == 0
+    assert m.app.pausada is True
+
+
+def test_al_reanudar_vuelve_a_dictar(m: Montaje) -> None:
+    m.app.pausar(True)
+    m.app.pausar(False)
+
+    _dictar_mantenido(m)
+
+    assert len(m.insertor.insertados) == 1 and m.app.pausada is False
+
+
+def test_pausar_en_medio_de_una_grabacion_la_termina_normalmente(m: Montaje) -> None:
+    m.escucha.pulsar(M)
+    assert m.espera_estado(E.ESCUCHANDO)
+
+    m.app.pausar(True)
+    m.escucha.soltar(M)  # soltar sigue funcionando: si no, la grabación quedaría colgada
+
+    assert _esperar(lambda: len(m.insertor.insertados) == 1)

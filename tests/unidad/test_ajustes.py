@@ -188,3 +188,37 @@ def test_se_puede_cambiar_un_atajo_solo_para_esta_ejecucion(ajustes: AjustesRepo
 
     assert foto.atajo_mantener == "F10" and foto.atajo_alternar == "<Control><Alt>space"
     assert ajustes.obtener("atajo.mantener") == "RightCtrl"
+
+
+# ---- los dos atajos a la vez (la pantalla de teclas los cambia juntos) ---------------------------------------
+
+
+def test_cambia_los_dos_atajos_de_una_vez(ajustes: AjustesRepo) -> None:
+    ajustes.establecer_atajos("F9", "<Control><Alt>d")
+
+    assert ajustes.obtener("atajo.mantener") == "F9"
+    assert ajustes.obtener("atajo.alternar") == "<Control><Alt>d"
+
+
+def test_se_pueden_intercambiar_los_dos_atajos(ajustes: AjustesRepo) -> None:
+    ajustes.establecer_atajos("F9", "<Control><Alt>d")
+
+    ajustes.establecer_atajos("F10", "<Control><Alt>d")  # mantener cambia, alternar igual
+    ajustes.establecer_atajos("F9", "<Control><Alt>e")
+
+    assert ajustes.obtener("atajo.mantener") == "F9"
+
+
+def test_si_uno_de_los_dos_es_invalido_no_se_guarda_ninguno(ajustes: AjustesRepo) -> None:
+    with pytest.raises(DatoInvalido):
+        ajustes.establecer_atajos("F9", "Ctrl")  # el segundo no sirve
+
+    assert ajustes.obtener("atajo.mantener") == "RightCtrl"
+    assert ajustes.obtener("atajo.alternar") == "<Control><Alt>space"
+
+
+def test_dos_atajos_iguales_se_rechazan_juntos(ajustes: AjustesRepo) -> None:
+    with pytest.raises(DatoInvalido, match="distint"):
+        ajustes.establecer_atajos("<Control><Alt>d", "<Control><Alt>d")
+
+    assert ajustes.obtener("atajo.mantener") == "RightCtrl"

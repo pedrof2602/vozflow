@@ -155,6 +155,31 @@ class AjustesRepo:
                 (clave, json.dumps(limpio)),
             )
 
+    @staticmethod
+    def defecto(clave: str) -> Any:
+        return AjustesRepo._definicion(clave).defecto
+
+    def validar_atajos(self, mantener: str, alternar: str) -> tuple[str, str]:
+        """Comprueba los dos atajos juntos y los devuelve normalizados, sin guardar nada."""
+        validos = (_mantener(mantener), _alternar(alternar))
+        if _igual(*validos):
+            raise DatoInvalido("Los dos atajos tienen que ser teclas distintas")
+        return validos
+
+    def establecer_atajos(self, mantener: str, alternar: str) -> None:
+        """Cambia los dos atajos a la vez: o se guardan los dos o ninguno."""
+        valido_mantener, valido_alternar = self.validar_atajos(mantener, alternar)
+        with self._base:
+            for clave, valor in (
+                ("atajo.mantener", valido_mantener),
+                ("atajo.alternar", valido_alternar),
+            ):
+                self._base.execute(
+                    "INSERT INTO ajuste (clave, valor) VALUES (?, ?) "
+                    "ON CONFLICT (clave) DO UPDATE SET valor = excluded.valor",
+                    (clave, json.dumps(valor)),
+                )
+
     def restablecer(self, clave: str) -> None:
         self._definicion(clave)
         with self._base:

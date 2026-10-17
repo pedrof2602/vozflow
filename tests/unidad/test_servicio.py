@@ -74,7 +74,8 @@ class Montaje:
             self._cierre(self)
 
     def correr(self, *argumentos: str) -> int:
-        return main(list(argumentos), self.dependencias, self.servicio)
+        # Por defecto el programa abre la interfaz; estas pruebas son del servicio sin interfaz.
+        return main(["--sin-interfaz", *argumentos], self.dependencias, self.servicio)
 
 
 def _dictar(m: Montaje) -> None:

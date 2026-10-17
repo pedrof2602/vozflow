@@ -49,6 +49,9 @@ class HistorialRepo:
         self._base = base
         self._activo = activo
 
+    def esta_activo(self) -> bool:
+        return self._activo()
+
     def guardar(
         self,
         *,

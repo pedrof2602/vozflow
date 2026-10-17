@@ -261,6 +261,7 @@ class Aplicacion:
         self._hilo: threading.Thread | None = None
         self._por_mantener = False
         self._cancelado = False
+        self.pausada = False
         self._inicio_s = 0.0
         self._ventana_consultada: Future[InfoVentana | None] | None = None
         self.texto_sin_insertar: str | None = None
@@ -277,6 +278,30 @@ class Aplicacion:
         self._motor.cargar()
         self._cancelado = False
         self._escucha.iniciar(self._atajos, self._al_atajo)
+
+    def pausar(self, pausado: bool) -> None:
+        """En pausa los atajos no empiezan dictados nuevos; soltar y terminar siguen andando."""
+        self.pausada = pausado
+
+    def reconfigurar_atajos(self, atajos: Mapping[AccionDeAtajo, str]) -> None:
+        """Cambia las teclas en vivo, sin reiniciar. Si las nuevas no sirven, quedan las de antes.
+
+        Lanza ``AtajoOcupado`` (u otro error de la escucha) con las nuevas y ``RuntimeError`` si
+        hay un dictado en curso.
+        """
+        with self._candado:
+            if self._dictado.estado not in (EstadoDelDictado.INACTIVO, EstadoDelDictado.ERROR):
+                raise RuntimeError(
+                    "Esperá a que termine el dictado en curso para cambiar las teclas"
+                )
+            anteriores = self._atajos
+            self._escucha.detener()
+            try:
+                self._escucha.iniciar(dict(atajos), self._al_atajo)
+            except Exception:
+                self._escucha.iniciar(anteriores, self._al_atajo)  # vuelve a como estaba
+                raise
+            self._atajos = dict(atajos)
 
     def detener(self) -> None:
         self._escucha.detener()
@@ -300,6 +325,8 @@ class Aplicacion:
             if self._cancelado:
                 return
             escuchando = self._dictado.estado is EstadoDelDictado.ESCUCHANDO
+            if self.pausada and not escuchando and traducido is not Evento.SOLTAR:
+                return  # en pausa no se empiezan dictados nuevos
             if traducido is Evento.SOLTAR and escuchando and not self._por_mantener:
                 return  # se empezó con «alternar»: soltar la otra tecla no corta nada
             if not self._dictado.manejar(traducido):

@@ -25,8 +25,20 @@ def _para_exec(texto: str) -> str:
     return f'"{texto}"' if " " in texto else texto
 
 
+def argumentos_de_inicio(*, ruta_uv: str | None = None, proyecto: Path | None = None) -> list[str]:
+    """Las palabras del comando que arranca vozflow desde este proyecto con ``uv``."""
+    ruta_uv = ruta_uv or shutil.which("uv") or str(Path.home() / ".local" / "bin" / "uv")
+    proyecto = proyecto or Path(__file__).resolve().parents[2]
+    return [ruta_uv, "run", "--project", str(proyecto), "python", "-m", "vozflow"]
+
+
+def comando_de_inicio(*, ruta_uv: str | None = None, proyecto: Path | None = None) -> str:
+    palabras = argumentos_de_inicio(ruta_uv=ruta_uv, proyecto=proyecto)
+    return " ".join(_para_exec(p) for p in palabras)
+
+
 def _contenido(ruta_uv: str, proyecto: Path) -> str:
-    orden = f"{_para_exec(ruta_uv)} run --project {_para_exec(str(proyecto))} python -m vozflow"
+    orden = comando_de_inicio(ruta_uv=ruta_uv, proyecto=proyecto)
     return "\n".join(
         [
             "[Desktop Entry]",
