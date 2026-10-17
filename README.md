@@ -4,7 +4,8 @@ Dictado por voz local para el escritorio, al estilo Wispr Flow. Hablás, soltás
 aparece donde tenías el cursor: en la terminal, en VS Code, en el navegador, en el chat.
 
 - **Todo el reconocimiento de voz es local.** El audio no sale de tu computadora.
-- Español (rioplatense o neutro) e inglés, con detección automática.
+- Español (rioplatense o neutro) e inglés, con detección automática, y traducción a cualquier
+  idioma con una tecla aparte (opcional).
 - Puntuación, mayúsculas y comandos de voz («nueva línea», «punto», «borra eso») por reglas, sin
   modelo de lenguaje.
 - Diccionario personal, atajos de texto, modos por aplicación e historial.
@@ -63,9 +64,22 @@ uv run python -m vozflow autoinicio activar     # y `desactivar` para sacarlo
 |---|---|
 | Mantener para hablar | mantener apretada la tecla **Ctrl derecha** |
 | Pulsar para empezar y terminar | **Ctrl + Alt + Espacio** |
+| Mantener para hablar y **traducir** | mantener apretada la tecla **Alt derecha** (AltGr) |
 
 Mientras grabás aparece un indicador pequeño abajo en la pantalla; no toma el foco, así que el
 texto se inserta donde estaba el cursor. **Nunca se envía Enter.**
+
+### Traducir lo que decís
+
+Con la tercera tecla (Alt derecha), lo que dictás se traduce al idioma que elijas (por defecto,
+inglés) antes de pegarse: hablás en español y escribís en inglés, o al revés. El idioma se escribe
+a mano en Ajustes → Reescritura (sirve cualquiera que conozca el modelo) o con
+`uv run python -m vozflow proveedor idioma portugués`.
+
+Usa el mismo servicio de la reescritura (Claude, OpenRouter u Ollama), con su clave y su
+interruptor general, que vienen apagados. Si no está configurado, no hay red o la clave falla, **no
+se pega nada** en el idioma equivocado: aparece un aviso y el texto dictado queda en el historial.
+Cuando dictás con la tecla de traducir, el indicador muestra el idioma de destino.
 
 ### Comandos de voz
 
