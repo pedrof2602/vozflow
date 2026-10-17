@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bibliotecas del sistema que usan sounddevice (PortAudio), evdev y PySide6 (Qt).
+      - name: Dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libportaudio2 libegl1 libxkbcommon0 libdbus-1-3
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # El mismo script que se corre en local antes de cada commit.
+      - name: scripts/ci.sh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: scripts/ci.sh
