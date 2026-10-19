@@ -1,145 +1,109 @@
 # vozflow
 
-Dictado por voz local para el escritorio, al estilo Wispr Flow. Hablás, soltás la tecla y el texto
-aparece donde tenías el cursor: en la terminal, en VS Code, en el navegador, en el chat.
+Dictá en lugar de escribir. Mantenés apretada una tecla, hablás, la soltás y el texto aparece donde
+tenías el cursor: en un mensaje, un mail, un documento, la terminal.
 
-- **Todo el reconocimiento de voz es local.** El audio no sale de tu computadora.
-- Español (rioplatense o neutro) e inglés, con detección automática, y traducción a cualquier
-  idioma con una tecla aparte (opcional).
-- Puntuación, mayúsculas y comandos de voz («nueva línea», «punto», «borra eso») por reglas, sin
-  modelo de lenguaje.
-- Diccionario personal, atajos de texto, modos por aplicación e historial.
-- Reescritura con un modelo de lenguaje (Ollama, Anthropic u OpenRouter): **opcional y apagada**.
-  Sin un proveedor activo, nada sale de tu computadora.
+Todo se entiende **en tu computadora**: tu voz no viaja por internet.
 
-Es una aplicación personal hecha para un solo equipo: Fedora con GNOME sobre Wayland.
+## Qué hace
 
-## Requisitos
+- **Escribe lo que decís** en español o en inglés (y mezclados), con puntos, comas y mayúsculas.
+- **Funciona en cualquier aplicación**: no hace falta copiar y pegar.
+- **Entiende comandos de voz**: decí «nueva línea» o «punto» y escribe el signo.
+- **Quita muletillas** («eh», «mmm») y repeticiones.
+- **Aprende tus palabras**: nombres propios, términos de tu trabajo, y atajos para escribir textos
+  largos con una frase.
+- **Guarda un historial** de lo que dictaste, para buscarlo o recuperarlo si algo falla (se puede
+  apagar).
+- **Opcional**: un asistente de IA que mejora o traduce el texto. Viene apagado.
 
-| Requisito | Para qué |
+## Tu privacidad
+
+- **Tu voz no sale de tu computadora**: se procesa ahí mismo, el audio nunca viaja ni se guarda.
+- **Tus datos se quedan en tu computadora**: historial, vocabulario y ajustes están en una carpeta
+  tuya (`~/.local/share/vozflow`).
+- **No hay telemetría**: vozflow no manda estadísticas ni avisa nada a nadie.
+- **Las claves** de los servicios de IA, si las usás, se guardan en el llavero de tu sistema, nunca
+  en un archivo ni en los registros.
+- **Con el asistente de IA apagado** (como viene) no sale nada de tu computadora.
+  Si lo prendés, solo el texto que dictaste viaja al servicio que elijas; el audio, nunca.
+- **El texto pasa por el portapapeles** un instante para poder pegarse. Si usás una extensión que
+  guarda un historial del portapapeles, ahí va a quedar anotado lo que dictaste.
+- **Solo hay una excepción**: la primera vez baja el modelo de voz de internet (unos 480 MB).
+  Después funciona sin conexión.
+
+## Instalar
+
+Necesitás **Linux con GNOME** (el escritorio de Fedora y de Ubuntu, entre otros) y unos **3 GB**
+libres. Está probado en **Fedora**; en Ubuntu y Debian debería andar, y te pedimos que nos cuentes si
+no. Todavía no funciona en Windows, macOS ni con otros escritorios.
+
+Abrí una terminal y pegá estas tres líneas:
+
+```bash
+git clone https://github.com/pedrof2602/vozflow.git
+cd vozflow
+./scripts/instalar.sh
+```
+
+El instalador te cuenta qué va a hacer, te pide la contraseña de tu computadora **una sola vez**,
+baja el modelo de voz y deja vozflow en tu menú de aplicaciones. Si algo falta, te lo dice en
+palabras simples. Si lo corrés de nuevo, actualiza lo que haga falta sin romper nada.
+
+Al final puede pedirte que **cierres sesión y vuelvas a entrar**: es para que el teclado funcione.
+
+## Usarla en 3 pasos
+
+1. Abrí **vozflow** desde el menú de aplicaciones. La primera vez te guía para elegir el micrófono y
+   probar tu voz.
+2. Hacé clic donde quieras escribir y **mantené apretada la tecla** para dictar (por defecto, la
+   tecla **Ctrl de la derecha**). Hablá.
+3. **Soltala**: el texto aparece donde tenías el cursor.
+
+Podés cambiar la tecla, el micrófono, el idioma y el tema en la ventana de **Ajustes**.
+
+## Si algo no anda
+
+| Si pasa esto | Probá esto |
 |---|---|
-| GNOME Shell sobre Wayland | atajos globales y pegado en la ventana activa |
-| Python 3.14 y [uv](https://docs.astral.sh/uv/) | correr el proyecto |
-| Tu usuario en el grupo `input` | mantener-para-hablar (lectura del teclado) |
-| `wl-clipboard` (`wl-copy`, `wl-paste`) | copiar el texto antes de pegarlo |
-| `ydotoold` corriendo | mandar la combinación de pegado (respaldo: portal de escritorio remoto) |
-| `portaudio` | captura de audio |
-| `gnome-keyring` | guardar las claves de acceso de la reescritura |
-| `gnome-shell-extension-appindicator` | ícono en la bandeja (si falta, vozflow usa su ventana) |
+| La tecla no hace nada | Si recién instalaste, cerrá sesión y volvé a entrar. Después abrí **Ajustes → Dictado**. |
+| El texto no aparece en la ventana | Abrí **Ajustes → Historial**: ahí está lo que dictaste, con el motivo. Tocá **Copiar** y pegalo con Ctrl+V. |
+| La barra del micrófono no se mueve | **Ajustes → Dictado → Micrófono**: elegí otro. |
+| Dice que falta el modelo de voz | Corré `python -m vozflow descargar-modelo` (necesita internet esta única vez). |
+| No veo el ícono arriba | GNOME no muestra íconos de bandeja sin una extensión. vozflow anda igual: abrila desde el menú. |
+| Anda lento | **Ajustes → Avanzado → Modelo y rendimiento**: probá un modelo más chico, como «base». |
+| En la terminal pega algo raro (`^V`) | **Ajustes → Avanzado → Modos**: marcá esa aplicación como terminal. |
 
-Para ver el ícono en la bandeja:
+## Cómo reportar un problema
 
-```bash
-sudo dnf install gnome-shell-extension-appindicator
-gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com
-```
+1. Abrí una terminal en la carpeta de vozflow y corré:
 
-(cerrá y volvé a abrir la sesión para que GNOME la cargue).
+   ```bash
+   uv run python -m vozflow diagnostico --copiable
+   ```
 
-## Instalación
+2. Copiá lo que sale y pegalo en una [incidencia nueva](../../issues/new/choose).
 
-```bash
-git clone https://github.com/pedrof2602/vozflow.git ~/Proyectos/vozflow
-cd ~/Proyectos/vozflow
-uv sync
-uv run python -m vozflow descargar-modelo   # única vez que usa internet (~480 MB)
-uv run python -m vozflow diagnostico        # revisa que el escritorio tenga todo lo necesario
-```
+Ese resumen **no incluye** lo que dictaste, los títulos de tus ventanas, el nombre de tus
+micrófonos ni tus claves.
 
-## Uso diario
+## Desinstalar
 
 ```bash
-uv run python -m vozflow
+./scripts/desinstalar.sh
 ```
 
-Abre la bandeja y queda esperando. Para que arranque con la sesión:
+Saca vozflow del menú y del arranque, y **te pregunta por separado** antes de borrar tus datos, el
+modelo de voz, tus claves o los permisos del teclado. Si decís que no, no pierde nada.
 
-```bash
-uv run python -m vozflow autoinicio activar     # y `desactivar` para sacarlo
-```
+## Licencia
 
-### Atajos (se cambian desde Ajustes → Teclas)
+vozflow es software libre con [licencia MIT](LICENSE): podés usarlo, copiarlo y modificarlo.
 
-| Qué | Por defecto |
-|---|---|
-| Mantener para hablar | mantener apretada la tecla **Ctrl derecha** |
-| Pulsar para empezar y terminar | **Ctrl + Alt + Espacio** |
-| Mantener para hablar y **traducir** | mantener apretada la tecla **Alt derecha** (AltGr) |
+Se escribió desde cero; la app [OpenWhispr](https://github.com/OpenWhispr/openwhispr) fue una
+inspiración para entender el problema, pero no se copió su código.
 
-Mientras grabás aparece un indicador pequeño abajo en la pantalla; no toma el foco, así que el
-texto se inserta donde estaba el cursor. **Nunca se envía Enter.**
+## Para quien quiera colaborar
 
-### Traducir lo que decís
-
-Con la tercera tecla (Alt derecha), lo que dictás se traduce al idioma que elijas (por defecto,
-inglés) antes de pegarse: hablás en español y escribís en inglés, o al revés. El idioma se escribe
-a mano en Ajustes → Reescritura (sirve cualquiera que conozca el modelo) o con
-`uv run python -m vozflow proveedor idioma portugués`.
-
-Usa el mismo servicio de la reescritura (Claude, OpenRouter u Ollama), con su clave y su
-interruptor general, que vienen apagados. Si no está configurado, no hay red o la clave falla, **no
-se pega nada** en el idioma equivocado: aparece un aviso y el texto dictado queda en el historial.
-Cuando dictás con la tecla de traducir, el indicador muestra el idioma de destino.
-
-### Comandos de voz
-
-«nueva línea», «punto», «coma», «dos puntos», «signo de interrogación», «abre paréntesis»,
-«borra eso»… La tabla completa está en `specs/001-vozflow/contracts/comandos-de-voz.md`.
-
-### Ajustes
-
-Desde el ícono de la bandeja → *Abrir ajustes*: teclas, micrófono e idioma, modos por aplicación
-(una terminal siempre recibe el texto en una sola línea), diccionario y atajos de texto,
-reescritura, copia de seguridad e historial.
-
-### Sin interfaz
-
-```bash
-uv run python -m vozflow --sin-interfaz        # solo el servicio de atajos
-uv run python -m vozflow dictar --segundos 10  # grabar unos segundos y ver el texto
-uv run python -m vozflow diccionario --help    # también: atajos, modos, asignar, historial,
-                                               # exportar, importar y proveedor
-```
-
-## Aspecto
-
-La ventana de ajustes sigue el aspecto de OpenWhispr (`docs/diseno/referencia-openwhispr.md`):
-barra lateral agrupada (Inicio, Texto, Dictado, Inteligencia artificial, Datos), tarjetas
-redondeadas, interruptores, teclas dibujadas como teclas y un tema que se elige en Ajustes → Apariencia (automático, claro u oscuro; el
-automático sigue al del sistema), sin reiniciar, con acento cherry lavado. El indicador flotante es una píldora oscura con barras de onda que
-siguen tu voz, y muestra «→ idioma» al traducir. La tipografía es la primera instalada entre
-Inter, Adwaita Sans, Noto Sans y Cantarell; no se empaqueta ninguna fuente.
-
-## Qué guarda y dónde
-
-- `~/.local/share/vozflow/vozflow.db`: diccionario, atajos, modos, ajustes e historial. **El audio
-  no se guarda.** El historial se puede apagar en Ajustes.
-- Las claves de acceso viven en el llavero del escritorio, nunca en ese archivo ni en los
-  registros.
-
-## Solución de problemas
-
-| Síntoma | Qué mirar |
-|---|---|
-| La tecla no hace nada | `uv run python -m vozflow diagnostico`: indica qué falta |
-| «Atajo ocupado» al arrancar | otra función de GNOME usa esa combinación: cambiala en Ajustes → Teclas |
-| No aparece el ícono | falta la extensión AppIndicator; la ventana de ajustes muestra el estado |
-| El texto sale en la ventana equivocada | el historial guarda la aplicación detectada |
-| Se pega como `^V` en la terminal | marcá la aplicación como terminal en Ajustes → Modos |
-| Muy lento | `motor.hilos` en Ajustes → Audio (4 fue lo medido como mejor) |
-
-## Salvedades
-
-- **El texto dictado pasa por el portapapeles.** vozflow lo copia, manda la combinación de pegado
-  y restaura lo que tenías. Si usás un historial de portapapeles (por ejemplo la extensión
-  `clipboard-indicator`), el texto dictado queda anotado ahí.
-- **La detección de la ventana activa no ve todo.** Chrome, Teams y Obsidian no se identifican
-  hoy; en esas aplicaciones se usa el modo general. El pegado no depende de eso.
-- Cambiar el micrófono, el idioma, el modelo o los hilos rige al reiniciar vozflow; las teclas y el
-  indicador rigen enseguida.
-
-## Desarrollo
-
-`scripts/ci.sh` corre el formato, `ruff`, `mypy` estricto y las pruebas (el mismo script que la
-CI de GitHub). La especificación, el plan y las tareas están en `specs/001-vozflow/`; las
-validaciones hechas a mano, en `docs/validacion/`. Las convenciones de trabajo, en `CLAUDE.md`.
+Mirá [CONTRIBUTING.md](CONTRIBUTING.md): cómo preparar el proyecto, correr las pruebas y proponer
+cambios. Todo (código, comentarios, documentación) está en español.

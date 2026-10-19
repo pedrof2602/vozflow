@@ -2,6 +2,9 @@
 name = "vozflow"
 version = "0.1.0"
 description = "Dictado por voz local para el escritorio, al estilo Wispr Flow"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "pedrof2602", email = "86478923+pedrof2602@users.noreply.github.com" }
 ]
