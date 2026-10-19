@@ -5,7 +5,7 @@ import os
 from PySide6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
-from vozflow.ui.logo import AZUL_DEL_LOGO, logo
+from vozflow.ui.logo import COLOR_DEL_LOGO, logo
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -28,10 +28,10 @@ def test_las_esquinas_son_transparentes_porque_el_cuadrado_es_redondeado() -> No
     assert imagen.pixelColor(127, 127).alpha() == 0
 
 
-def test_el_fondo_es_azul() -> None:
+def test_el_fondo_es_el_cherry() -> None:
     imagen = _imagen(128)
 
-    assert imagen.pixelColor(10, 64).name() == AZUL_DEL_LOGO
+    assert imagen.pixelColor(10, 64).name() == COLOR_DEL_LOGO
 
 
 def test_el_centro_tiene_una_barra_clara() -> None:

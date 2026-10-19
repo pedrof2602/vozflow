@@ -39,7 +39,6 @@ def test_todos_los_colores_son_hexadecimales_de_seis_cifras(paleta: Paleta) -> N
 def test_la_oscura_usa_los_valores_de_la_guia() -> None:
     assert OSCURA.fondo == "#191b1d" and OSCURA.tarjeta == "#24272a"
     assert OSCURA.texto == "#e8e8e8" and OSCURA.borde == "#383b3e"
-    assert OSCURA.acento == "#3e89ff"
 
 
 def test_la_clara_usa_los_valores_de_la_guia() -> None:
@@ -181,3 +180,26 @@ def test_los_recursos_de_cada_tema_no_se_pisan(tmp_path: Path) -> None:
     a, b = preparar_recursos(OSCURA, tmp_path), preparar_recursos(CLARA, tmp_path)
 
     assert a["flecha"] != b["flecha"]
+
+
+# ---- el acento es un cherry lavado, no el azul de la referencia -----------------------------------------------
+
+
+@pytest.mark.parametrize("paleta", PALETAS)
+def test_el_acento_es_un_cherry_y_no_un_azul(paleta: Paleta) -> None:
+    for color in (paleta.primario, paleta.acento, paleta.acento_texto, paleta.foco):
+        rojo, verde, azul = (int(color[i : i + 2], 16) for i in (1, 3, 5))
+        assert rojo > azul and rojo > verde + 30, (paleta.nombre, color)
+
+
+@pytest.mark.parametrize("paleta", PALETAS)
+def test_el_cherry_es_lavado_y_no_un_rojo_saturado(paleta: Paleta) -> None:
+    rojo, verde, azul = (int(paleta.primario[i : i + 2], 16) for i in (1, 3, 5))
+    assert verde >= 50 and azul >= 70, paleta.primario  # con algo de gris: apagado
+
+
+@pytest.mark.parametrize("paleta", PALETAS)
+def test_la_seleccion_lleva_el_tinte_del_acento_y_el_texto_se_lee(paleta: Paleta) -> None:
+    rojo, verde, azul = (int(paleta.seleccion[i : i + 2], 16) for i in (1, 3, 5))
+    assert rojo >= azul and rojo > verde
+    assert contraste(paleta.acento_texto, paleta.seleccion) >= 4.5

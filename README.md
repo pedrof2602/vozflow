@@ -105,8 +105,8 @@ uv run python -m vozflow diccionario --help    # también: atajos, modos, asigna
 
 La ventana de ajustes sigue el aspecto de OpenWhispr (`docs/diseno/referencia-openwhispr.md`):
 barra lateral agrupada (Inicio, Texto, Dictado, Inteligencia artificial, Datos), tarjetas
-redondeadas, interruptores, teclas dibujadas como teclas y un tema oscuro o claro que sigue al
-del sistema, sin reiniciar. El indicador flotante es una píldora oscura con barras de onda que
+redondeadas, interruptores, teclas dibujadas como teclas y un tema que se elige en Ajustes → Apariencia (automático, claro u oscuro; el
+automático sigue al del sistema), sin reiniciar, con acento cherry lavado. El indicador flotante es una píldora oscura con barras de onda que
 siguen tu voz, y muestra «→ idioma» al traducir. La tipografía es la primera instalada entre
 Inter, Adwaita Sans, Noto Sans y Cantarell; no se empaqueta ninguna fuente.
 

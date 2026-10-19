@@ -109,3 +109,73 @@ def test_un_widget_nuevo_toma_el_tema(tmp_path: Path, qtbot: QtBot) -> None:
     etiqueta.show()
 
     assert etiqueta.font().family() != "" and etiqueta.palette() is not None
+
+
+# ---- modo claro, oscuro o automático ----------------------------------------------------------------------------
+
+
+def test_en_automatico_manda_el_sistema(tmp_path: Path) -> None:
+    aspecto = Aspecto(_app(), tmp_path)
+    aspecto.establecer_modo("auto")
+
+    aspecto.aplicar("light")
+    assert aspecto.paleta is CLARA
+    aspecto.aplicar("dark")
+    assert aspecto.paleta is OSCURA
+
+
+def test_el_modo_claro_ignora_al_sistema(tmp_path: Path) -> None:
+    aspecto = Aspecto(_app(), tmp_path)
+    aspecto.establecer_modo("claro")
+
+    aspecto.aplicar("dark")
+
+    assert aspecto.paleta is CLARA
+
+
+def test_el_modo_oscuro_ignora_al_sistema(tmp_path: Path) -> None:
+    aspecto = Aspecto(_app(), tmp_path)
+    aspecto.establecer_modo("oscuro")
+
+    aspecto.aplicar("light")
+
+    assert aspecto.paleta is OSCURA
+
+
+def test_cambiar_de_modo_se_aplica_en_el_momento(tmp_path: Path) -> None:
+    aspecto = Aspecto(_app(), tmp_path)
+    aspecto.seguir_al_sistema(lambda: "dark")
+    aspecto.establecer_modo("auto")
+    assert aspecto.paleta is OSCURA
+
+    aspecto.establecer_modo("claro")
+
+    assert aspecto.paleta is CLARA
+
+
+def test_volver_a_automatico_retoma_el_color_del_sistema(tmp_path: Path) -> None:
+    aspecto = Aspecto(_app(), tmp_path)
+    aspecto.seguir_al_sistema(lambda: "dark")
+    aspecto.establecer_modo("claro")
+
+    aspecto.establecer_modo("auto")
+
+    assert aspecto.paleta is OSCURA
+
+
+def test_un_cambio_del_sistema_no_pisa_un_modo_fijo(tmp_path: Path) -> None:
+    app = _app()
+    aspecto = Aspecto(app, tmp_path)
+    aspecto.establecer_modo("oscuro")
+    aspecto.seguir_al_sistema(lambda: "light")
+
+    app.styleHints().colorSchemeChanged.emit(app.styleHints().colorScheme())
+
+    assert aspecto.paleta is OSCURA
+
+
+def test_un_modo_desconocido_es_un_error(tmp_path: Path) -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="modo"):
+        Aspecto(_app(), tmp_path).establecer_modo("sepia")

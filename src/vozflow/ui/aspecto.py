@@ -16,6 +16,8 @@ from vozflow.ui.tema import (
     preparar_recursos,
 )
 
+_MODOS: dict[str, str | None] = {"auto": None, "claro": "light", "oscuro": "dark"}
+
 
 def esquema_del_sistema(app: QApplication) -> str | None:
     """``dark`` o ``light`` según el sistema; ``None`` si no lo informa."""
@@ -34,11 +36,21 @@ class Aspecto:
         self._oyentes: list[Callable[[Paleta], None]] = []
         self.fuente = "sans-serif"
         self.paleta = paleta_del_sistema(None)
+        self._modo = "auto"
+        self._leer_esquema: Callable[[], str | None] = lambda: esquema_del_sistema(app)
 
     def al_cambiar(self, oyente: Callable[[Paleta], None]) -> None:
         self._oyentes.append(oyente)
 
+    def establecer_modo(self, modo: str) -> None:
+        """``auto`` sigue al sistema; ``claro`` y ``oscuro`` lo ignoran. Se aplica en el momento."""
+        if modo not in _MODOS:
+            raise ValueError(f"El modo «{modo}» no existe; son {', '.join(_MODOS)}")
+        self._modo = modo
+        self.aplicar(self._leer_esquema())
+
     def aplicar(self, esquema: str | None) -> None:
+        esquema = _MODOS[self._modo] or esquema
         self.paleta = paleta_del_sistema(esquema)
         self.fuente = familia_del_sistema()
         establecer_paleta(self.paleta)
@@ -50,5 +62,8 @@ class Aspecto:
 
     def seguir_al_sistema(self, esquema: Callable[[], str | None] | None = None) -> None:
         """Vuelve a aplicar el tema cada vez que el sistema cambia de claro a oscuro."""
-        leer = esquema or (lambda: esquema_del_sistema(self._app))
-        self._app.styleHints().colorSchemeChanged.connect(lambda *_: self.aplicar(leer()))
+        if esquema is not None:
+            self._leer_esquema = esquema
+        self._app.styleHints().colorSchemeChanged.connect(
+            lambda *_: self.aplicar(self._leer_esquema())
+        )

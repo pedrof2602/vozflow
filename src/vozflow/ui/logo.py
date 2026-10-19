@@ -1,9 +1,9 @@
-"""El logo de vozflow, dibujado en código: un cuadrado redondeado azul con barras de onda."""
+"""El logo de vozflow, dibujado en código: un cuadrado redondeado cherry con barras de onda."""
 
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
 
-AZUL_DEL_LOGO = "#2f6fe0"
+COLOR_DEL_LOGO = "#b64f67"
 _ALTURAS = (0.22, 0.46, 0.74, 0.46, 0.22)  # fracción del lado, de izquierda a derecha
 
 
@@ -13,7 +13,7 @@ def _dibujar(lado: int) -> QPixmap:
     pintor = QPainter(imagen)
     pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
     pintor.setPen(Qt.PenStyle.NoPen)
-    pintor.setBrush(QColor(AZUL_DEL_LOGO))
+    pintor.setBrush(QColor(COLOR_DEL_LOGO))
     pintor.drawRoundedRect(QRectF(0, 0, lado, lado), lado * 0.22, lado * 0.22)
     pintor.setBrush(QColor("#ffffff"))
     ancho, hueco = lado * 0.08, lado * 0.075

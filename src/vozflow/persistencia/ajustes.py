@@ -87,6 +87,15 @@ def _idioma_de_traduccion(valor: Any) -> str:
     return texto
 
 
+_TEMAS = ("auto", "claro", "oscuro")
+
+
+def _tema(valor: Any) -> str:
+    if valor not in _TEMAS:
+        raise DatoInvalido("El tema debe ser «auto», «claro» u «oscuro»")
+    return str(valor)
+
+
 @dataclass(frozen=True)
 class _Clave:
     defecto: Any
@@ -105,6 +114,7 @@ _CLAVES: dict[str, _Clave] = {
     "historial.activo": _Clave(True, _booleano),
     "reescritura.activa": _Clave(False, _booleano),
     "interfaz.indicador": _Clave(True, _booleano),
+    "interfaz.tema": _Clave("auto", _tema),
 }
 
 

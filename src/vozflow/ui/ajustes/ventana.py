@@ -33,6 +33,7 @@ from vozflow.persistencia.diccionario_repo import DiccionarioRepo
 from vozflow.persistencia.historial import HistorialRepo
 from vozflow.persistencia.modos_repo import ModosRepo
 from vozflow.reescritura import FabricaDeReescritor
+from vozflow.ui.ajustes.apariencia import PaginaApariencia
 from vozflow.ui.ajustes.audio import PaginaAudio
 from vozflow.ui.ajustes.copia import PaginaCopia
 from vozflow.ui.ajustes.historial import PaginaHistorial
@@ -63,6 +64,7 @@ class ContextoDeAjustes:
     portapapeles: _Portapapeles
     insertor: Insertor
     listar_dispositivos: Callable[[], list[Dispositivo]]
+    aplicar_tema: Callable[[str], None] = lambda modo: None
 
 
 def crear_paginas(
@@ -86,6 +88,7 @@ def crear_paginas(
             contexto.insertor,
             al_reinsertar,
         ),
+        "Apariencia": PaginaApariencia(ajustes, contexto.aplicar_tema),
     }
 
 
@@ -97,8 +100,9 @@ GRUPOS_POR_DEFECTO = {
     "Audio": "DICTADO",
     "Reescritura": "INTELIGENCIA ARTIFICIAL",
     "Copia": "DATOS",
+    "Apariencia": "APLICACIÓN",
 }
-ORDEN_DE_GRUPOS = ["INICIO", "TEXTO", "DICTADO", "INTELIGENCIA ARTIFICIAL", "DATOS"]
+ORDEN_DE_GRUPOS = ["INICIO", "TEXTO", "DICTADO", "INTELIGENCIA ARTIFICIAL", "DATOS", "APLICACIÓN"]
 _ICONOS_POR_PAGINA = {
     "Historial": "historial",
     "Modos": "modos",
@@ -107,6 +111,7 @@ _ICONOS_POR_PAGINA = {
     "Audio": "audio",
     "Reescritura": "reescritura",
     "Copia": "copia",
+    "Apariencia": "ajustes",
 }
 _DESCRIPCIONES_POR_DEFECTO = {
     "Historial": "Lo que dictaste, para buscarlo y volver a usarlo",
@@ -116,6 +121,7 @@ _DESCRIPCIONES_POR_DEFECTO = {
     "Audio": "El micrófono que se escucha",
     "Reescritura": "Mejora y traducción con un modelo de lenguaje, solo si lo prendés",
     "Copia": "Exportar e importar tus datos",
+    "Apariencia": "Tema claro, oscuro o el del sistema",
 }
 
 

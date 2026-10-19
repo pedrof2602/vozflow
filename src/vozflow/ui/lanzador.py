@@ -29,7 +29,7 @@ from vozflow.reescritura import ReescrituraDeBase
 from vozflow.ui.ajustes.ventana import ContextoDeAjustes
 from vozflow.ui.aplicacion_grafica import InterfazGrafica
 from vozflow.ui.arranque import InstanciaUnica
-from vozflow.ui.aspecto import Aspecto, esquema_del_sistema
+from vozflow.ui.aspecto import Aspecto
 
 _registro = logging.getLogger(__name__)
 
@@ -63,7 +63,6 @@ def arrancar_interfaz(
     app.setApplicationName("vozflow")
     app.setQuitOnLastWindowClosed(False)  # vive en la bandeja
     aspecto = Aspecto(app, _directorio_del_tema())
-    aspecto.aplicar(esquema_del_sistema(app))
     aspecto.seguir_al_sistema()
     instancia = InstanciaUnica("vozflow", _directorio_del_candado())
     if not instancia.obtener():
@@ -74,6 +73,7 @@ def arrancar_interfaz(
     base = dependencias.abrir_base()
     try:
         repo = AjustesRepo(base)
+        aspecto.establecer_modo(repo.obtener("interfaz.tema"))
         ajustes = repo.cargar().con_atajos(
             argumentos.mantener, argumentos.alternar, argumentos.traducir
         )
@@ -118,6 +118,7 @@ def arrancar_interfaz(
             portapapeles=PortapapelesWayland(),
             insertor=insertor,
             listar_dispositivos=listar_dispositivos,
+            aplicar_tema=aspecto.establecer_modo,
         )
         interfaz = InterfazGrafica(
             controlador=_Controlador(aplicacion, app),
