@@ -200,24 +200,9 @@ def test_la_guia_pide_los_cambios_de_especificacion_aparte_y_la_prueba_primero()
 # ---- publicar: lo decide una persona (RP-029) ----------------------------------------------------------------
 
 
-def test_la_guia_de_publicacion_dice_que_solo_el_dueno_cambia_la_visibilidad() -> None:
-    guia = (RAIZ / "docs" / "publicar.md").read_text(encoding="utf-8")
-
-    assert "scripts/revisar_publicacion.py" in guia
-    assert "solo vos" in guia.lower() and "visibilidad" in guia.lower()
-
-
-def test_la_guia_explica_como_resolver_el_correo_personal() -> None:
-    guia = (RAIZ / "docs" / "publicar.md").read_text(encoding="utf-8")
-
-    assert "noreply" in guia and "--aceptar" in guia
-
-
-def test_la_guia_lista_lo_que_hay_que_confirmar_antes_de_publicar() -> None:
-    guia = (RAIZ / "docs" / "publicar.md").read_text(encoding="utf-8")
-
-    assert "titular de la licencia" in guia.lower()
-    assert guia.count("- [ ]") >= 5
+# La guía de publicación (docs/publicar.md) era un documento interno de Pedro y se sacó del
+# repositorio por decisión suya (2026-10-19): sus tres pruebas se retiran con ella. Lo que sigue
+# vigente es que ningún script ni flujo cambie la visibilidad del repositorio.
 
 
 def test_ningun_script_ni_flujo_del_repositorio_cambia_la_visibilidad() -> None:
