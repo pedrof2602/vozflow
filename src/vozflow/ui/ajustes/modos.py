@@ -2,7 +2,6 @@
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QFormLayout,
     QHBoxLayout,
@@ -19,6 +18,7 @@ from vozflow.persistencia.asignaciones_repo import AsignacionesRepo
 from vozflow.persistencia.errores import DatoInvalido
 from vozflow.persistencia.modos_repo import ModosRepo
 from vozflow.ui.ajustes.base import PaginaBase
+from vozflow.ui.componentes import Interruptor
 
 _PEGADOS = (("Automático", "automatico"), ("Como terminal", "terminal"), ("Normal", "normal"))
 _SALTOS = (("Conservar los saltos de línea", "conservar"), ("Una sola línea", "espacio"))
@@ -33,10 +33,10 @@ class PaginaModos(PaginaBase):
         self.lista = QListWidget()
         self.lista.currentTextChanged.connect(self._al_elegir)
         self.campo_nombre = QLineEdit()
-        self.check_muletillas = QCheckBox("Quitar muletillas")
-        self.check_puntuacion = QCheckBox("Puntuación y mayúsculas automáticas")
-        self.check_comandos = QCheckBox("Comandos de voz")
-        self.check_reescribir = QCheckBox("Reescribir con el modelo de lenguaje")
+        self.check_muletillas = Interruptor("Quitar muletillas")
+        self.check_puntuacion = Interruptor("Puntuación y mayúsculas automáticas")
+        self.check_comandos = Interruptor("Comandos de voz")
+        self.check_reescribir = Interruptor("Reescribir con el modelo de lenguaje")
         self.campo_instruccion = QPlainTextEdit()
         self.campo_instruccion.setPlaceholderText(
             "Indicación de estilo para la reescritura (opcional)"
@@ -50,6 +50,7 @@ class PaginaModos(PaginaBase):
         boton_nuevo = QPushButton("Nuevo")
         boton_nuevo.clicked.connect(lambda _=False: self.nuevo())
         boton_guardar = QPushButton("Guardar")
+        boton_guardar.setProperty("principal", True)
         boton_guardar.clicked.connect(lambda _=False: self.guardar_modo())
         self.boton_borrar = QPushButton("Borrar")
         self.boton_borrar.clicked.connect(lambda _=False: self.borrar_modo())
@@ -73,7 +74,7 @@ class PaginaModos(PaginaBase):
         self.campo_aplicacion = QLineEdit()
         self.campo_aplicacion.setPlaceholderText("Identificador de la aplicación, p. ej. ptyxis")
         self.combo_modo_de_aplicacion = QComboBox()
-        self.check_terminal = QCheckBox("Marcar como terminal")
+        self.check_terminal = Interruptor("Marcar como terminal")
         asignar = QPushButton("Asignar")
         asignar.clicked.connect(
             lambda _=False: self.asignar(

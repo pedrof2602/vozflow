@@ -91,6 +91,7 @@ class PaginaProveedores(PaginaBase):
             ("Apagar la reescritura", self.desactivar),
         ):
             boton = QPushButton(texto)
+            boton.setProperty("principal", texto == "Guardar")
             boton.clicked.connect(lambda _=False, a=accion: a())
             botones.addWidget(boton)
         formulario.addRow(botones)

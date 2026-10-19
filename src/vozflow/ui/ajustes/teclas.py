@@ -13,6 +13,7 @@ from vozflow.atajos.puerto import AccionDeAtajo, AtajoOcupado
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.errores import DatoInvalido
 from vozflow.servicio_dbus import InstanciaYaEnEjecucion
+from vozflow.ui.componentes import FilaDeTeclas
 
 _DESFASE_XCB = 8  # el servidor gráfico suma 8 al código de tecla de Linux
 _MODIFICADORES_POR_LADO = {  # código de Linux → nombre con lado
@@ -50,6 +51,7 @@ class CampoDeAtajo(QLineEdit):
     """Un campo que no se escribe: se aprieta la combinación y la captura."""
 
     atajo_cambiado = Signal(str)
+    atajo_mostrado = Signal(str)
 
     def __init__(self, permitir_modificador_solo: bool) -> None:
         super().__init__()
@@ -67,6 +69,7 @@ class CampoDeAtajo(QLineEdit):
     def atajo(self, valor: str) -> None:
         self._atajo = valor
         self.setText(valor)
+        self.atajo_mostrado.emit(valor)
 
     def keyPressEvent(self, evento: QKeyEvent) -> None:  # noqa: N802 (nombre de Qt)
         tecla = Qt.Key(evento.key())
@@ -135,19 +138,37 @@ class PaginaTeclas(QWidget):
         self._etiqueta = QLabel()
         self._etiqueta.setWordWrap(True)
         aplicar = QPushButton("Aplicar")
+        aplicar.setProperty("principal", True)
         aplicar.clicked.connect(lambda _=False: self.aplicar())
         restablecer = QPushButton("Restablecer")
         restablecer.clicked.connect(lambda _=False: self.restablecer())
         formulario = QFormLayout(self)
+        self._filas = {
+            "mantener": FilaDeTeclas(),
+            "alternar": FilaDeTeclas(),
+            "traducir": FilaDeTeclas(),
+        }
+        for clave, campo in (
+            ("mantener", self.campo_mantener),
+            ("alternar", self.campo_alternar),
+            ("traducir", self.campo_traducir),
+        ):
+            campo.atajo_mostrado.connect(self._filas[clave].establecer)
         formulario.addRow("Mantener para hablar", self.campo_mantener)
+        formulario.addRow("", self._filas["mantener"])
         formulario.addRow("Pulsar para empezar y terminar", self.campo_alternar)
+        formulario.addRow("", self._filas["alternar"])
         formulario.addRow("Mantener para hablar y traducir", self.campo_traducir)
+        formulario.addRow("", self._filas["traducir"])
         botones = QHBoxLayout()
         botones.addWidget(aplicar)
         botones.addWidget(restablecer)
         formulario.addRow(botones)
         formulario.addRow(self._etiqueta)
         self._mostrar_actuales()
+
+    def teclas_mostradas(self, cual: str) -> list[str]:
+        return self._filas[cual].textos()
 
     def aplicar(self) -> None:
         """Valida, prueba las teclas nuevas en la escucha en vivo y recién entonces las guarda."""
@@ -195,4 +216,7 @@ class PaginaTeclas(QWidget):
     def _avisar(self, texto: str, *, error: bool) -> None:
         self.mensaje, self.hay_error = texto, error
         self._etiqueta.setText(texto)
-        self._etiqueta.setStyleSheet("color: #b42318;" if error else "")
+        self._etiqueta.setProperty("error", error)
+        self._etiqueta.setProperty("exito", not error)
+        self._etiqueta.style().unpolish(self._etiqueta)
+        self._etiqueta.style().polish(self._etiqueta)

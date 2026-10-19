@@ -160,3 +160,129 @@ def test_las_paginas_se_conectan_entre_si_por_la_misma_base(qtbot: QtBot, tmp_pa
     copia.exportar()  # type: ignore[attr-defined]
 
     assert "SQLAlchemy" in destino.read_text(encoding="utf-8")
+
+
+# ---- barra lateral agrupada (lote 7) -----------------------------------------------------------------------
+
+
+def _con_grupos(qtbot: QtBot) -> VentanaAjustes:
+    paginas: dict[str, QWidget] = {
+        "Uno": QLabel("uno"),
+        "Dos": QLabel("dos"),
+        "Tres": QLabel("tres"),
+        "Cuatro": QLabel("cuatro"),
+    }
+    ventana = VentanaAjustes(
+        paginas,
+        grupos={"Cuatro": "Primero", "Uno": "Segundo", "Dos": "Segundo", "Tres": "Tercero"},
+        orden_de_grupos=["Primero", "Segundo", "Tercero"],
+        espera_ms=0,
+    )
+    qtbot.addWidget(ventana)
+    return ventana
+
+
+def test_la_barra_lateral_ordena_las_paginas_por_grupo(qtbot: QtBot) -> None:
+    ventana = _con_grupos(qtbot)
+
+    assert ventana.nombres_de_paginas() == ["Cuatro", "Uno", "Dos", "Tres"]
+
+
+def test_la_barra_lateral_muestra_la_etiqueta_de_cada_grupo(qtbot: QtBot) -> None:
+    ventana = _con_grupos(qtbot)
+
+    assert ventana.etiquetas_de_grupo() == ["Primero", "Segundo", "Tercero"]
+
+
+def test_hay_un_boton_de_navegacion_por_pagina(qtbot: QtBot) -> None:
+    ventana = _con_grupos(qtbot)
+
+    assert [b.text().strip() for b in ventana.botones_de_navegacion()] == [
+        "Cuatro", "Uno", "Dos", "Tres",
+    ]  # fmt: skip
+
+
+def test_hacer_clic_en_un_boton_muestra_su_pagina(qtbot: QtBot) -> None:
+    ventana = _con_grupos(qtbot)
+    ventana.show()
+
+    ventana.botones_de_navegacion()[2].click()
+
+    assert ventana.pagina_actual() == "Dos"
+    assert ventana.widget_de_pagina("Dos").isVisible()
+    assert not ventana.widget_de_pagina("Uno").isVisible()
+
+
+def test_solo_un_boton_esta_marcado_a_la_vez(qtbot: QtBot) -> None:
+    ventana = _con_grupos(qtbot)
+
+    ventana.mostrar_pagina("Tres")
+
+    marcados = [b.isChecked() for b in ventana.botones_de_navegacion()]
+    assert marcados.count(True) == 1 and marcados[3] is True
+
+
+def test_el_encabezado_muestra_el_nombre_de_la_pagina(qtbot: QtBot) -> None:
+    ventana = _con_grupos(qtbot)
+
+    ventana.mostrar_pagina("Dos")
+
+    assert ventana.titulo_de_pagina() == "Dos"
+
+
+def test_una_pagina_se_puede_describir_en_el_encabezado(qtbot: QtBot) -> None:
+    ventana = VentanaAjustes(
+        {"Uno": QLabel("uno")}, descripciones={"Uno": "Una descripción"}, espera_ms=0
+    )
+    qtbot.addWidget(ventana)
+
+    assert ventana.descripcion_de_pagina() == "Una descripción"
+
+
+def test_arranca_en_la_primera_pagina_de_la_barra(qtbot: QtBot) -> None:
+    ventana = _con_grupos(qtbot)
+
+    assert ventana.pagina_actual() == "Cuatro"
+
+
+def test_el_estado_lleva_un_punto_del_color_del_estado(qtbot: QtBot) -> None:
+    ventana = _ventana(qtbot)
+
+    ventana.establecer_vista(vista_de(E.ESCUCHANDO))
+
+    assert vista_de(E.ESCUCHANDO).color in ventana.color_de_estado()
+
+
+def test_las_paginas_largas_se_pueden_desplazar(qtbot: QtBot) -> None:
+    from PySide6.QtWidgets import QScrollArea
+
+    ventana = _con_grupos(qtbot)
+
+    pagina = ventana.widget_de_pagina("Uno")
+
+    area = pagina.parent()
+    while area is not None and not isinstance(area, QScrollArea):
+        area = area.parent()
+    assert isinstance(area, QScrollArea)
+
+
+def test_agregar_una_pagina_despues_la_suma_a_la_barra(qtbot: QtBot) -> None:
+    ventana = _ventana(qtbot)
+
+    ventana.agregar_pagina("Nueva", QLabel("n"), grupo="Otro")
+
+    assert "Nueva" in ventana.nombres_de_paginas()
+    assert "Otro" in ventana.etiquetas_de_grupo()
+
+
+def test_las_paginas_reales_quedan_agrupadas_como_en_la_guia(qtbot: QtBot, tmp_path: Path) -> None:
+    ventana = VentanaAjustes(crear_paginas(_contexto(tmp_path), lambda accion: accion()))
+    qtbot.addWidget(ventana)
+
+    assert ventana.nombres_de_paginas() == [
+        "Historial", "Modos", "Vocabulario", "Teclas", "Audio", "Reescritura", "Copia",
+    ]  # fmt: skip
+    assert ventana.etiquetas_de_grupo() == [
+        "INICIO", "TEXTO", "DICTADO", "INTELIGENCIA ARTIFICIAL", "DATOS",
+    ]  # fmt: skip
+    assert all(not b.icon().isNull() for b in ventana.botones_de_navegacion())

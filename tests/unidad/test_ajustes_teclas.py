@@ -314,3 +314,22 @@ def test_la_de_traducir_acepta_un_modificador_solo(qtbot: QtBot) -> None:
     )  # Shift derecho
 
     assert pagina.campo_traducir.atajo == "RightShift"
+
+
+# ---- teclas dibujadas (lote 7) -------------------------------------------------------------------------------
+
+
+def test_cada_atajo_se_muestra_como_teclas_dibujadas(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    assert pagina.teclas_mostradas("mantener") == ["Ctrl der."]
+    assert pagina.teclas_mostradas("alternar") == ["Ctrl", "Alt", "Espacio"]
+    assert pagina.teclas_mostradas("traducir") == ["Alt der."]
+
+
+def test_las_teclas_dibujadas_siguen_al_campo(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    pagina.campo_mantener.atajo = "F9"
+
+    assert pagina.teclas_mostradas("mantener") == ["F9"]

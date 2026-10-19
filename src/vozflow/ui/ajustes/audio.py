@@ -2,12 +2,13 @@
 
 from collections.abc import Callable
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QLineEdit, QPushButton, QSpinBox
+from PySide6.QtWidgets import QComboBox, QFormLayout, QLineEdit, QPushButton, QSpinBox
 
 from vozflow.audio.captura import Dispositivo, listar_dispositivos
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.errores import DatoInvalido
 from vozflow.ui.ajustes.base import PaginaBase
+from vozflow.ui.componentes import Interruptor
 
 _IDIOMAS = (("Automático", "automatico"), ("Español", "es"), ("Inglés", "en"))
 
@@ -28,8 +29,9 @@ class PaginaAudio(PaginaBase):
         self.campo_modelo = QLineEdit()
         self.spin_hilos = QSpinBox()
         self.spin_hilos.setRange(1, 8)
-        self.check_indicador = QCheckBox("Mostrar el indicador al grabar")
+        self.check_indicador = Interruptor("Mostrar el indicador al grabar")
         guardar = QPushButton("Guardar")
+        guardar.setProperty("principal", True)
         guardar.clicked.connect(lambda _=False: self.guardar())
         formulario = QFormLayout(self)
         formulario.addRow("Micrófono", self.combo_microfono)

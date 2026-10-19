@@ -14,4 +14,7 @@ class PaginaBase(QWidget):
     def avisar(self, texto: str, *, error: bool = False) -> None:
         self.mensaje, self.hay_error = texto, error
         self._etiqueta_mensaje.setText(texto)
-        self._etiqueta_mensaje.setStyleSheet("color: #b42318;" if error else "")
+        self._etiqueta_mensaje.setProperty("error", error)
+        self._etiqueta_mensaje.setProperty("exito", not error)
+        self._etiqueta_mensaje.style().unpolish(self._etiqueta_mensaje)
+        self._etiqueta_mensaje.style().polish(self._etiqueta_mensaje)
