@@ -78,4 +78,6 @@ def test_la_ventana_incluye_la_pagina_de_apariencia(qtbot: QtBot, tmp_path) -> N
 
     paginas = crear_paginas(_contexto(tmp_path), lambda accion: accion())
 
+    for pagina in paginas.values():
+        qtbot.addWidget(pagina)  # que Qt las destruya antes de cerrar el intérprete
     assert "Apariencia" in paginas

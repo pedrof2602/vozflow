@@ -5,7 +5,7 @@ import logging
 
 import httpx
 import pytest
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from vozflow.llm.openrouter import ReescritorOpenRouter
@@ -129,6 +129,11 @@ _CLAVES = st.text(
 )
 
 
+_TEXTO_PUBLICO_DE_LA_PETICION = (
+    'HTTP Request: POST https://openrouter.ai/api/v1/chat/completions "HTTP/1.1 401 Unauthorized"'
+)
+
+
 class _Recolector(logging.Handler):
     def __init__(self) -> None:
         super().__init__()
@@ -141,6 +146,9 @@ class _Recolector(logging.Handler):
 @settings(max_examples=50, deadline=None)
 @given(_CLAVES)
 def test_la_clave_no_aparece_ni_en_el_error_ni_en_los_registros(clave: str) -> None:
+    # Una «clave» que es un pedazo del texto público de la petición (la dirección, por ejemplo
+    # «openrout») figura en el registro sin ser un secreto filtrado: no prueba nada.
+    assume(clave not in _TEXTO_PUBLICO_DE_LA_PETICION)
     registro = logging.getLogger()
     manejador = _Recolector()
     registro.addHandler(manejador)
