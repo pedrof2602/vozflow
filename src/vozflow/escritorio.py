@@ -46,8 +46,8 @@ def _contenido(ruta_uv: str, proyecto: Path) -> str:
             "Name=vozflow",
             "Comment=Dictado por voz local",
             f"Exec={orden}",
+            "Icon=vozflow",
             "Terminal=false",
-            "NoDisplay=true",
             "Categories=Utility;",
             _MARCA,
             "",
@@ -74,6 +74,36 @@ def asegurar_entrada_de_escritorio(
     destino.write_text(nuevo, encoding="utf-8")
     destino.chmod(0o644)
     return destino
+
+
+def ruta_del_icono() -> Path:
+    base = rutas.directorio_de_aplicaciones().parent  # ~/.local/share
+    return base / "icons" / "hicolor" / "scalable" / "apps" / f"{ID_DE_APLICACION}.svg"
+
+
+def asegurar_icono() -> Path:
+    """Instala el ícono del menú. No pisa un archivo que no haya generado vozflow."""
+    from vozflow.ui.logo import MARCA_DEL_SVG, svg_del_logo
+
+    destino = ruta_del_icono()
+    if destino.exists() and MARCA_DEL_SVG not in destino.read_text(encoding="utf-8"):
+        _registro.warning("%s existe pero no lo generó vozflow; no se modifica", destino)
+        return destino
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(svg_del_logo(), encoding="utf-8")
+    destino.chmod(0o644)
+    return destino
+
+
+def retirar_icono() -> bool:
+    """Borra el ícono solo si lo generó vozflow. Devuelve si lo borró."""
+    from vozflow.ui.logo import MARCA_DEL_SVG
+
+    destino = ruta_del_icono()
+    if not destino.is_file() or MARCA_DEL_SVG not in destino.read_text(encoding="utf-8"):
+        return False
+    destino.unlink()
+    return True
 
 
 def retirar_entrada_de_escritorio() -> bool:

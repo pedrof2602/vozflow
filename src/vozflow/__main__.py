@@ -36,7 +36,13 @@ from vozflow.diagnostico import (
 from vozflow.dominio.copia import CopiaInvalida
 from vozflow.dominio.dictado import EstadoDelDictado
 from vozflow.dominio.tuberia import OpcionesDeTuberia
-from vozflow.escritorio import argumentos_de_inicio
+from vozflow.escritorio import (
+    argumentos_de_inicio,
+    asegurar_entrada_de_escritorio,
+    asegurar_icono,
+    retirar_entrada_de_escritorio,
+    retirar_icono,
+)
 from vozflow.gestion_de_proveedores import AlmacenDeClaves
 from vozflow.insercion.puerto import Insertor
 from vozflow.medicion import FRASES_DE_PRUEBA, ejecutar_medicion
@@ -217,6 +223,11 @@ def _crear_parser() -> argparse.ArgumentParser:
     )
     autoinicio.add_argument("accion", choices=["activar", "desactivar", "estado"])
 
+    entrada = ordenes.add_parser(
+        "entrada", help="poner o sacar vozflow del menú de aplicaciones (con su ícono)"
+    )
+    entrada.add_argument("accion", choices=["instalar", "retirar"])
+
     diagnostico = ordenes.add_parser(
         "diagnostico", help="revisa qué tiene este escritorio para atajos e inserción de texto"
     )
@@ -345,6 +356,18 @@ def _datos_copiables() -> DatosCopiables:
         base.close()
 
 
+def _orden_entrada(argumentos: argparse.Namespace, dependencias: Dependencias) -> int:
+    if argumentos.accion == "instalar":
+        asegurar_icono()
+        ruta = asegurar_entrada_de_escritorio()
+        dependencias.salida(f"vozflow ya está en el menú de aplicaciones ({ruta}).")
+    else:
+        retirar_entrada_de_escritorio()
+        retirar_icono()
+        dependencias.salida("vozflow ya no está en el menú de aplicaciones.")
+    return CODIGO_OK
+
+
 def _orden_diagnostico(argumentos: argparse.Namespace) -> int:
     if argumentos.copiable:
         usuario = os.environ.get("USER") or getpass.getuser()
@@ -438,6 +461,8 @@ def main(
             return _orden_descargar_modelo(argumentos, dependencias)
         if argumentos.orden == "diagnostico":
             return _orden_diagnostico(argumentos)
+        if argumentos.orden == "entrada":
+            return _orden_entrada(argumentos, dependencias)
         if argumentos.orden in cli.ORDENES_DE_DATOS:
             return _orden_de_datos(argumentos, dependencias)
         if argumentos.orden == "autoinicio":

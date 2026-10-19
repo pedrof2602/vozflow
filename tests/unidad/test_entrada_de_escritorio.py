@@ -55,7 +55,9 @@ def test_la_entrada_tiene_lo_que_el_portal_y_el_escritorio_necesitan(datos: Path
 
     assert entrada["Type"] == "Application"
     assert entrada["Name"] == "vozflow"
-    assert entrada["NoDisplay"] == "true"
+    # 002 (RP-001): la entrada ahora aparece en el menú de aplicaciones, con su ícono.
+    assert "NoDisplay" not in entrada
+    assert entrada["Icon"] == "vozflow"
     assert entrada["Terminal"] == "false"
     assert entrada["Exec"] == "/usr/bin/uv run --project /proyectos/vozflow python -m vozflow"
 
