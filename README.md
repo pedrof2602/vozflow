@@ -20,6 +20,12 @@ Todo se entiende **en tu computadora**: tu voz no viaja por internet.
 ## Tu privacidad
 
 - **Tu voz no sale de tu computadora**: se procesa ahí mismo, el audio nunca viaja ni se guarda.
+  La única excepción es la prueba de medición, que solo corre si la lanzás vos a propósito: guarda
+  las frases en una carpeta tuya, que nadie más puede leer.
+- **El teclado**: para saber cuándo apretás la tecla de dictar, vozflow lee los eventos del teclado
+  (por eso el instalador te agrega al grupo «input»). Solo mira si apretaste tus teclas de
+  dictado; no anota ni guarda lo que escribís. Ese permiso es de todo tu usuario: cualquier otro
+  programa que corras podría leer el teclado igual, así que instalá solo software de confianza.
 - **Tus datos se quedan en tu computadora**: historial, vocabulario y ajustes están en una carpeta
   tuya (`~/.local/share/vozflow`).
 - **No hay telemetría**: vozflow no manda estadísticas ni avisa nada a nadie.

@@ -48,7 +48,15 @@ _registro = logging.getLogger(__name__)
 
 
 def _directorio_del_candado() -> Path:
-    return Path(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir())
+    corrida = os.environ.get("XDG_RUNTIME_DIR")
+    if corrida:
+        return Path(corrida)
+    # Sin carpeta de ejecución del usuario no se usa /tmp a secas: otro usuario podría ocupar
+    # el candado.
+    propia = Path(tempfile.gettempdir()) / f"vozflow-{os.getuid()}"
+    propia.mkdir(mode=0o700, exist_ok=True)
+    propia.chmod(0o700)
+    return propia
 
 
 def _crear_asistente(

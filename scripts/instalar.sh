@@ -20,6 +20,14 @@ MODULOS_DIR="${VOZFLOW_MODULOS_DIR:-/etc/modules-load.d}"
 ESPACIO_MINIMO_MB=3000
 MEMORIA_AVISO_MB=4096
 USUARIO="${USER:-$(id -un)}"
+# El nombre se arma dentro del bloque que corre con permisos de administrador: solo los
+# caracteres que admite un nombre de usuario de Linux.
+case "$USUARIO" in
+    "" | *[!A-Za-z0-9._-]* | -*)
+        printf '%s\n' "✗ El nombre de usuario («$USUARIO») tiene caracteres que no puedo usar con seguridad." >&2
+        exit 1
+        ;;
+esac
 
 decir() { printf '%s\n' "$*"; }
 

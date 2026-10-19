@@ -129,3 +129,28 @@ def test_si_falla_el_paso_de_permisos_no_sigue_con_lo_demas(tmp_path: Path) -> N
     sistema.correr()
 
     assert not any(linea.startswith("uv") for linea in sistema.lineas_del_registro())
+
+
+def test_rechaza_un_nombre_de_usuario_con_caracteres_de_shell_antes_de_usar_sudo(
+    tmp_path: Path,
+) -> None:
+    """El nombre se arma dentro del bloque que corre con permisos de administrador: nunca
+    puede llevar comillas, puntos y coma ni sustituciones."""
+    sistema = _sistema(tmp_path)
+
+    resultado = sistema.correr(USER='x"; touch /tmp/pwned; echo "')
+
+    assert resultado.returncode != 0
+    assert sistema.llamadas("sudo") == []
+    assert not any("usermod" in linea for linea in sistema.lineas_del_registro())
+
+
+def test_acepta_nombres_de_usuario_normales_de_linux(tmp_path: Path) -> None:
+    for nombre in ("pedro", "maria.lopez", "usuario_1", "a-b"):
+        carpeta = tmp_path / nombre
+        carpeta.mkdir()
+        sistema = _sistema(carpeta)
+
+        sistema.correr(USER=nombre, VOZFLOW_GRUPOS_ACTIVOS=f"{nombre} input")
+
+        assert sistema.llamadas("sudo") == ["sudo"], nombre
