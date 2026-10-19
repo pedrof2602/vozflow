@@ -74,6 +74,15 @@ class Entorno:
         _dictar_mantenido(self.montaje)
         return self.montaje.insertor.insertados[-1][0]
 
+    def mejorar(self) -> str:
+        """Mantiene y suelta la tecla de mejorar (003): es la que usa la IA para pulir el texto."""
+        m = self.montaje
+        m.escucha.pulsar(AccionDeAtajo.MEJORAR)
+        assert m.espera_estado(E.ESCUCHANDO)
+        m.escucha.soltar(AccionDeAtajo.MEJORAR)
+        assert _esperar(lambda: m.app.estado in (E.INACTIVO, E.ERROR))
+        return m.insertor.insertados[-1][0]
+
     def dictar_traduciendo(self) -> None:
         """Mantiene y suelta la tecla de traducir; devuelve cuando el dictado terminó."""
         m = self.montaje
@@ -151,13 +160,13 @@ def test_con_todo_activo_se_inserta_el_texto_reescrito(crear) -> None:  # type: 
     e = crear()
     e.encender()
 
-    assert e.dictar() == "Texto reescrito."
+    assert e.mejorar() == "Texto reescrito."
 
 
 def test_el_historial_marca_la_reescritura_y_el_proveedor(crear) -> None:  # type: ignore[no-untyped-def]
     e = crear(texto="eh hola mundo")
     e.encender()
-    e.dictar()
+    e.mejorar()
 
     (dictado,) = e.historial.listar()
     assert dictado.reescrito is True and dictado.proveedor == "anthropic"
@@ -167,7 +176,7 @@ def test_el_historial_marca_la_reescritura_y_el_proveedor(crear) -> None:  # typ
 def test_el_reescritor_recibe_el_texto_ya_limpio_y_el_tiempo_del_proveedor(crear) -> None:  # type: ignore[no-untyped-def]
     e = crear(texto="eh hola mundo")
     e.encender()
-    e.dictar()
+    e.mejorar()
 
     texto, _, tiempo = e.reescritor.llamadas[0]
     assert texto == "Hola mundo." and tiempo == 9
@@ -178,7 +187,7 @@ def test_la_instruccion_lleva_el_estilo_del_modo_y_el_diccionario(crear) -> None
     e.encender()
     e.modos.actualizar(e.modos.general().id, instruccion="Tono muy formal")
     DiccionarioRepo(e.base).agregar("SQLAlchemy")
-    e.dictar()
+    e.mejorar()
 
     instruccion = e.reescritor.llamadas[0][1]
     assert "Tono muy formal" in instruccion and "SQLAlchemy" in instruccion
@@ -187,7 +196,7 @@ def test_la_instruccion_lleva_el_estilo_del_modo_y_el_diccionario(crear) -> None
 def test_usa_la_clave_del_llavero_del_proveedor_activo(crear) -> None:  # type: ignore[no-untyped-def]
     e = crear(claves=ClavesFalsas(anthropic="la-clave-guardada"))
     e.encender()
-    e.dictar()
+    e.mejorar()
 
     assert e.fabricados == [("anthropic", "la-clave-guardada")]
 
@@ -196,7 +205,7 @@ def test_ollama_no_usa_clave(crear) -> None:  # type: ignore[no-untyped-def]
     e = crear(claves=ClavesFalsas())
     e.encender("ollama")
 
-    assert e.dictar() == "Texto reescrito."
+    assert e.mejorar() == "Texto reescrito."
     assert e.fabricados == [("ollama", None)]
 
 
@@ -207,7 +216,7 @@ def test_los_atajos_de_texto_se_expanden_despues_y_no_pasan_por_el_modelo(crear)
     e.encender()
     AtajosTextoRepo(e.base).agregar("mi firma", "Pedro Freimeyer")
 
-    assert e.dictar() == "GRACIAS Pedro Freimeyer"
+    assert e.mejorar() == "GRACIAS Pedro Freimeyer"
     assert "Pedro" not in e.reescritor.recibidos[0]
 
 
@@ -220,7 +229,7 @@ def test_en_una_terminal_el_texto_reescrito_sale_en_una_sola_linea(crear) -> Non
     )
     e.encender()
 
-    assert e.dictar() == "Primera línea. Segunda línea."
+    assert e.mejorar() == "Primera línea. Segunda línea."
 
 
 class _EnMayusculas:
@@ -247,7 +256,7 @@ def test_si_falla_se_inserta_el_texto_limpio_y_se_avisa(crear, motivo: str) -> N
     e = crear(reescritor=ReescritorFalso(fallo=motivo))
     e.encender()
 
-    assert e.dictar() == "Hola mundo."
+    assert e.mejorar() == "Hola mundo."
     assert any(motivo in aviso for aviso in e.montaje.avisos)
     (dictado,) = e.historial.listar()
     assert dictado.reescrito is False and dictado.proveedor == "" and dictado.estado == "insertado"
@@ -267,7 +276,7 @@ def test_sin_clave_guardada_se_inserta_limpio_y_se_avisa(crear) -> None:  # type
     e = crear(claves=ClavesFalsas())
     e.encender()
 
-    assert e.dictar() == "Hola mundo."
+    assert e.mejorar() == "Hola mundo."
     assert any("clave" in aviso.lower() for aviso in e.montaje.avisos)
     assert e.fabricados == []
 
@@ -277,7 +286,7 @@ def test_activada_sin_ningun_proveedor_se_avisa(crear) -> None:  # type: ignore[
     e.ajustes.establecer("reescritura.activa", True)
     e.modos.actualizar(e.modos.general().id, reescribir=True)
 
-    assert e.dictar() == "Hola mundo."
+    assert e.mejorar() == "Hola mundo."
     assert any("proveedor" in aviso.lower() for aviso in e.montaje.avisos)
 
 
@@ -291,7 +300,7 @@ def test_un_llavero_que_no_anda_se_avisa_y_se_inserta_limpio(crear) -> None:  # 
     e = crear(claves=LlaveroRoto())
     e.encender()
 
-    assert e.dictar() == "Hola mundo."
+    assert e.mejorar() == "Hola mundo."
     assert any("llavero" in aviso.lower() for aviso in e.montaje.avisos)
 
 
@@ -420,7 +429,8 @@ def test_con_la_reescritura_apagada_la_tecla_de_traducir_no_manda_nada_y_avisa(c
 
     _sin_insertar_y_en_el_historial(e)
     assert e.fabricados == []  # ni siquiera se arma un cliente de red
-    assert any("reescritura" in aviso.lower() for aviso in e.montaje.avisos)
+    # 003: el aviso habla del «asistente de IA», no de la «reescritura».
+    assert any("asistente de ia" in aviso.lower() for aviso in e.montaje.avisos)
 
 
 def test_con_el_interruptor_general_apagado_tampoco_se_traduce(crear) -> None:  # type: ignore[no-untyped-def]

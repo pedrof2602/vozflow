@@ -13,11 +13,12 @@ def crear_escucha() -> EscuchaCompuesta:
     siguiente. El portal ``GlobalShortcuts`` se sumará aquí solo si la comprobación A lo prueba
     mejor que ``evdev``.
     """
-    por_evdev = [EscuchaEvdev]  # la misma lista: mantener y traducir leen el teclado juntas
+    por_evdev = [EscuchaEvdev]  # la misma lista: las de mantener leen el teclado juntas
     return EscuchaCompuesta(
         {
             AccionDeAtajo.ALTERNAR: [EscuchaDeGnome],
             AccionDeAtajo.MANTENER: por_evdev,
             AccionDeAtajo.TRADUCIR: por_evdev,
+            AccionDeAtajo.MEJORAR: por_evdev,
         }
     )

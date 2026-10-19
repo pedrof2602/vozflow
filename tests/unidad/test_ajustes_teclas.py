@@ -199,7 +199,9 @@ def test_aplicar_cambia_los_atajos_en_vivo_y_los_guarda(qtbot: QtBot) -> None:
 
     pagina.aplicar()
 
-    assert aplicador.recibidos == [{M: "RightCtrl", A: "<Control><Alt>d", T: "RightAlt"}]
+    assert aplicador.recibidos == [
+        {M: "RightCtrl", A: "<Control><Alt>d", T: "RightAlt", AccionDeAtajo.MEJORAR: "RightShift"}
+    ]
     assert ajustes.obtener("atajo.alternar") == "<Control><Alt>d"
     assert ajustes.obtener("atajo.mantener") == "RightCtrl"
     assert "ya funcionan" in pagina.mensaje.lower()
@@ -277,7 +279,12 @@ def test_restablecer_cada_tecla_vuelve_a_fabrica_y_lo_aplica(qtbot: QtBot) -> No
 
     assert ajustes.obtener("atajo.alternar") == "<Control><Alt>space"
     assert ajustes.obtener("atajo.traducir") == "RightAlt"
-    assert aplicador.recibidos[-1] == {M: "RightCtrl", A: "<Control><Alt>space", T: "RightAlt"}
+    assert aplicador.recibidos[-1] == {
+        M: "RightCtrl",
+        A: "<Control><Alt>space",
+        T: "RightAlt",
+        AccionDeAtajo.MEJORAR: "RightShift",
+    }
     assert pagina.campo_alternar.atajo == "<Control><Alt>space"
     assert pagina.campo_traducir.atajo == "RightAlt"
 
@@ -368,12 +375,12 @@ def test_cada_tecla_lleva_su_titulo_y_su_ayuda_en_lenguaje_llano(qtbot: QtBot) -
     pagina, _, _ = _pagina(qtbot)
     textos = [e.text() for e in pagina.findChildren(QLabel)]
 
-    for clave in ("atajo.alternar", "atajo.traducir"):
+    for clave in ("atajo.alternar", "atajo.traducir", "atajo.mejorar"):
         assert texto_de(clave).titulo in textos and ayuda_de(clave) in textos
 
 
 def test_estan_las_claves_para_el_inventario() -> None:
-    assert PaginaTeclas.CLAVES == ("atajo.alternar", "atajo.traducir")
+    assert PaginaTeclas.CLAVES == ("atajo.alternar", "atajo.traducir", "atajo.mejorar")
 
 
 def test_el_boton_aplicar_no_se_estira_a_todo_el_ancho(qtbot: QtBot) -> None:
@@ -382,3 +389,66 @@ def test_el_boton_aplicar_no_se_estira_a_todo_el_ancho(qtbot: QtBot) -> None:
     pagina.show()
 
     assert pagina.boton_aplicar.width() < pagina.width() / 2
+
+
+# ---- la tecla de mejorar (003) --------------------------------------------------------------------------------
+
+
+def test_muestra_la_tecla_de_mejorar_con_teclas_dibujadas(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    assert pagina.campo_mejorar.atajo == "RightShift"
+    assert pagina.teclas_mostradas("mejorar") == ["Shift der."]
+
+
+def test_cambiar_la_de_mejorar_se_aplica_en_vivo_y_se_guarda(qtbot: QtBot) -> None:
+    pagina, ajustes, aplicador = _pagina(qtbot)
+    pagina.campo_mejorar.atajo = "F11"
+
+    pagina.aplicar()
+
+    assert aplicador.recibidos[-1][AccionDeAtajo.MEJORAR] == "F11"
+    assert ajustes.obtener("atajo.mejorar") == "F11"
+
+
+def test_la_de_mejorar_no_puede_repetir_otra_tecla(qtbot: QtBot) -> None:
+    pagina, ajustes, aplicador = _pagina(qtbot)
+    pagina.campo_mejorar.atajo = "RightAlt"  # es la de mejorar y traducir
+
+    pagina.aplicar()
+
+    assert pagina.hay_error is True and "distint" in pagina.mensaje
+    assert aplicador.recibidos == [] and ajustes.obtener("atajo.mejorar") == "RightShift"
+
+
+def test_restablecer_la_de_mejorar_vuelve_a_shift_derecho(qtbot: QtBot) -> None:
+    pagina, ajustes, aplicador = _pagina(qtbot)
+    pagina.campo_mejorar.atajo = "F11"
+    pagina.aplicar()
+    fila = pagina.filas["atajo.mejorar"]
+    assert fila.boton_restablecer is not None and not fila.boton_restablecer.isHidden()
+
+    fila.boton_restablecer.click()
+
+    assert ajustes.obtener("atajo.mejorar") == "RightShift"
+    assert aplicador.recibidos[-1][AccionDeAtajo.MEJORAR] == "RightShift"
+
+
+def test_la_de_mejorar_acepta_un_modificador_solo(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    _apretar_y_soltar(
+        pagina.campo_mejorar, Qt.Key.Key_Shift, Qt.KeyboardModifier.ShiftModifier, 50
+    )  # Shift izquierdo
+
+    assert pagina.campo_mejorar.atajo == "LeftShift"
+
+
+def test_la_tecla_de_dictar_tampoco_puede_ser_la_de_mejorar(qtbot: QtBot) -> None:
+    from vozflow.persistencia.errores import DatoInvalido
+    from vozflow.ui.ajustes.teclas import cambiar_tecla_para_dictar
+
+    ajustes = AjustesRepo(abrir_base(":memory:"))
+
+    with pytest.raises(DatoInvalido, match="distint"):
+        cambiar_tecla_para_dictar(ajustes, lambda atajos: None, "RightShift")

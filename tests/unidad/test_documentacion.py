@@ -225,3 +225,33 @@ def test_ningun_script_ni_flujo_del_repositorio_cambia_la_visibilidad() -> None:
         if archivo.is_file():
             texto = archivo.read_text(encoding="utf-8", errors="replace")
             assert "gh repo edit" not in texto and "--visibility" not in texto, archivo
+
+
+# ---- las tres teclas (003, RT-009) -----------------------------------------------------------------------------
+
+
+def test_el_readme_explica_las_tres_teclas() -> None:
+    uso = _seccion(README, "Usarla en 3 pasos")
+
+    assert (
+        "Ctrl de la derecha" in uso and "Shift de la derecha" in uso and "Alt de la derecha" in uso
+    )
+    assert "mejorar" in uso.lower() and "traduc" in uso.lower()
+
+
+def test_el_readme_dice_que_dictar_a_secas_nunca_usa_la_ia() -> None:
+    privacidad = _seccion(README, "Tu privacidad").lower()
+
+    assert "dictar" in privacidad and "nunca" in privacidad and "asistente de ia" in privacidad
+
+
+def test_las_teclas_que_dice_el_readme_son_las_de_fabrica() -> None:
+    from vozflow.persistencia.ajustes import AjustesRepo
+
+    defectos = {
+        "mantener": AjustesRepo.defecto("atajo.mantener"),
+        "mejorar": AjustesRepo.defecto("atajo.mejorar"),
+        "traducir": AjustesRepo.defecto("atajo.traducir"),
+    }
+
+    assert defectos == {"mantener": "RightCtrl", "mejorar": "RightShift", "traducir": "RightAlt"}

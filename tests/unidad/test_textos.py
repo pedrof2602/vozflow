@@ -69,3 +69,22 @@ def test_texto_de_una_clave_desconocida_es_un_error_claro() -> None:
 
 def test_ayuda_de_devuelve_la_frase() -> None:
     assert ayuda_de("interfaz.tema") == TEXTOS["interfaz.tema"].ayuda
+
+
+# ---- las teclas de IA (003) -------------------------------------------------------------------------------------
+
+
+def test_ya_no_hay_texto_para_el_interruptor_de_mejorar_de_cada_modo() -> None:
+    assert "modo.reescribir" not in TEXTOS
+
+
+def test_la_ayuda_del_estilo_dice_que_se_usa_con_las_teclas_de_ia() -> None:
+    ayuda = ayuda_de("modo.estilo").lower()
+
+    assert "tecla" in ayuda and "mejorar" in ayuda
+
+
+def test_las_tres_teclas_se_explican_cada_una_con_lo_suyo() -> None:
+    assert texto_de("atajo.mejorar").titulo == "Tecla para mejorar"
+    assert texto_de("atajo.traducir").titulo == "Tecla para mejorar y traducir"
+    assert "pule" in ayuda_de("atajo.mejorar") and "traduce" in ayuda_de("atajo.traducir")

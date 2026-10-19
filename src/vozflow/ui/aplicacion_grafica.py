@@ -31,6 +31,7 @@ class InterfazGrafica(QObject):
         contexto: ContextoDeAjustes,
         nivel: Callable[[], float],
         destino_de_traduccion: Callable[[], str | None] = lambda: None,
+        mejorando: Callable[[], bool] = lambda: False,
         bandeja_disponible: Callable[[], bool] | None = None,
         intervalo_de_nivel_ms: int = _INTERVALO_DE_NIVEL_MS,
         asistente: VentanaAsistente | None = None,
@@ -40,6 +41,7 @@ class InterfazGrafica(QObject):
         self._controlador = controlador
         self._nivel = nivel
         self._destino_de_traduccion = destino_de_traduccion
+        self._mejorando = mejorando
         self._ajustes = ajustes
         self.asistente = asistente
         self.indicador = Indicador(activo=lambda: bool(ajustes.obtener("interfaz.indicador")))
@@ -90,7 +92,7 @@ class InterfazGrafica(QObject):
 
     def _al_cambiar_el_estado(self, estado: EstadoDelDictado) -> None:
         self.bandeja.establecer_estado(estado)
-        self.indicador.establecer_estado(estado, self._destino_de_traduccion())
+        self.indicador.establecer_estado(estado, self._destino_de_traduccion(), self._mejorando())
         if estado is EstadoDelDictado.ESCUCHANDO:
             self._timer.start()
         else:

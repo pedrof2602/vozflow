@@ -139,3 +139,32 @@ def test_el_idioma_de_destino_no_puede_agregar_lineas_a_la_instruccion() -> None
 def test_sin_traducir_a_la_instruccion_no_cambia() -> None:
     assert armar_instruccion(GENERAL, ["a"]) == armar_instruccion(GENERAL, ["a"], traducir_a=None)
     assert "Mantené el idioma" in armar_instruccion(GENERAL, [])
+
+
+# ---- mejorar y traducir (003) ------------------------------------------------------------------------------
+
+
+def test_al_traducir_tambien_pide_mejorar_la_redaccion() -> None:
+    texto = armar_instruccion(GENERAL, [], traducir_a="inglés").lower()
+
+    assert "mejorá la redacción" in texto
+    assert "gramática" in texto and "puntuación" in texto
+
+
+def test_al_traducir_el_estilo_del_modo_va_despues_de_mejorar() -> None:
+    modo = Modo(1, "General", es_general=True, instruccion="tono profesional")
+
+    texto = armar_instruccion(modo, [], traducir_a="inglés")
+
+    assert texto.lower().index("mejorá la redacción") < texto.index("Estilo pedido para este texto")
+    assert "tono profesional" in texto
+
+
+def test_solo_mejorar_no_pide_traducir() -> None:
+    assert "traducí todo" not in armar_instruccion(GENERAL, []).lower()
+
+
+def test_mejorar_y_traducir_sigue_devolviendo_solo_la_traduccion() -> None:
+    texto = armar_instruccion(GENERAL, [], traducir_a="inglés").lower()
+
+    assert "solo la traducción" in texto and "sin comentarios" in texto

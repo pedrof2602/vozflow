@@ -287,3 +287,48 @@ def test_en_la_pildora_se_ven_las_barras_en_el_color_del_estado(qtbot: QtBot) ->
     }
 
     assert indicador.color_del_estado() in colores
+
+
+# ---- «· IA» al mejorar (003, RT-008) ---------------------------------------------------------------------------
+
+
+def test_al_mejorar_el_indicador_avisa_que_usa_la_ia(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+
+    indicador.establecer_estado(E.ESCUCHANDO, mejorando=True)
+
+    assert indicador.texto == "Escuchando… · IA"
+
+
+def test_sin_mejorar_el_texto_no_cambia(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+
+    indicador.establecer_estado(E.ESCUCHANDO, mejorando=False)
+
+    assert indicador.texto == "Escuchando…"
+
+
+def test_al_traducir_manda_el_idioma_y_no_se_repite_la_ia(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+
+    indicador.establecer_estado(E.ESCUCHANDO, "inglés", mejorando=True)
+
+    assert indicador.texto == "Escuchando… → inglés"
+
+
+def test_mientras_transcribe_una_mejora_sigue_diciendo_ia(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+    indicador.establecer_estado(E.ESCUCHANDO, mejorando=True)
+
+    indicador.establecer_estado(E.TRANSCRIBIENDO, mejorando=True)
+
+    assert indicador.texto.endswith("· IA")
+
+
+def test_en_inactivo_se_oculta_aunque_se_estuviera_mejorando(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+    indicador.establecer_estado(E.ESCUCHANDO, mejorando=True)
+
+    indicador.establecer_estado(E.INACTIVO, mejorando=True)
+
+    assert not indicador.isVisible()

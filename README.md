@@ -26,7 +26,8 @@ Todo se entiende **en tu computadora**: tu voz no viaja por internet.
 - **Las claves** de los servicios de IA, si las usás, se guardan en el llavero de tu sistema, nunca
   en un archivo ni en los registros.
 - **Con el asistente de IA apagado** (como viene) no sale nada de tu computadora.
-  Si lo prendés, solo el texto que dictaste viaja al servicio que elijas; el audio, nunca.
+  Si lo prendés, solo el texto que dictaste con las teclas de mejorar o de traducir viaja al
+  servicio que elijas; el audio, nunca. **Dictar a secas nunca usa el asistente de IA.**
 - **El texto pasa por el portapapeles** un instante para poder pegarse. Si usás una extensión que
   guarda un historial del portapapeles, ahí va a quedar anotado lo que dictaste.
 - **Solo hay una excepción**: la primera vez baja el modelo de voz de internet (unos 480 MB).
@@ -60,7 +61,15 @@ Al final puede pedirte que **cierres sesión y vuelvas a entrar**: es para que e
    tecla **Ctrl de la derecha**). Hablá.
 3. **Soltala**: el texto aparece donde tenías el cursor.
 
-Podés cambiar la tecla, el micrófono, el idioma y el tema en la ventana de **Ajustes**.
+**Tres teclas, cada una hace una sola cosa** (todas se mantienen apretadas mientras hablás):
+
+- **Ctrl de la derecha**: dictar tal cual. El texto sale limpio y no pasa por ningún servicio.
+- **Shift de la derecha**: dictar y **mejorar** el texto con el asistente de IA (redacción,
+  puntuación, el estilo de tu modo).
+- **Alt de la derecha**: dictar, **mejorar y traducir** al idioma que elijas.
+
+Las dos últimas necesitan el asistente de IA prendido (**Ajustes → Avanzado → Asistente de IA**).
+Podés cambiar las teclas, el micrófono, el idioma y el tema en la ventana de **Ajustes**.
 
 ## Si algo no anda
 

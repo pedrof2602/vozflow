@@ -142,7 +142,7 @@ def arrancar_interfaz(
         repo = AjustesRepo(base)
         aspecto.establecer_modo(repo.obtener("interfaz.tema"))
         ajustes = repo.cargar().con_atajos(
-            argumentos.mantener, argumentos.alternar, argumentos.traducir
+            argumentos.mantener, argumentos.alternar, argumentos.traducir, argumentos.mejorar
         )
         grabadora = dependencias.crear_grabadora()
         insertor = servicio.crear_insertor()
@@ -199,6 +199,7 @@ def arrancar_interfaz(
             contexto=contexto,
             nivel=lambda: float(getattr(grabadora, "nivel", 0.0)),
             destino_de_traduccion=lambda: aplicacion.idioma_en_curso,
+            mejorando=lambda: aplicacion.intencion_en_curso == "mejorar",
             asistente=asistente,
         )
         aspecto.al_cambiar(lambda _: interfaz.ventana.actualizar_iconos())

@@ -1,7 +1,8 @@
 """Contrato de la escucha de atajos (contracts/puertos.md, RF-001 a RF-004).
 
-Hay tres acciones: ``mantener`` (hablar mientras se aprieta la tecla), ``traducir`` (igual, pero
-el dictado se traduce) y ``alternar`` (una pulsación empieza y otra termina). Cada técnica del
+Hay cuatro acciones: ``mantener`` (hablar mientras se aprieta la tecla), ``mejorar`` (igual, pero el
+texto lo pule el asistente de IA), ``traducir`` (igual, pero se pule y se traduce) y ``alternar``
+(una pulsación empieza y otra termina). Cada técnica del
 sistema —el atajo de GNOME, ``evdev``, el portal— traduce lo que ve a ``pulsado`` y ``soltado``
 y se lo pasa a un ``Despachador``, que aplica las mismas reglas para todas.
 """
@@ -20,6 +21,7 @@ class AccionDeAtajo(StrEnum):
     MANTENER = "mantener"
     ALTERNAR = "alternar"
     TRADUCIR = "traducir"
+    MEJORAR = "mejorar"
 
 
 class FaseDeAtajo(StrEnum):

@@ -80,8 +80,9 @@ class PaginaProveedores(PaginaBase):
         self.combo_idioma.setEditable(True)
         self.combo_idioma.addItems(_IDIOMAS_SUGERIDOS)
         self.aclaracion_de_traduccion = QLabel(
-            "La tecla de traducir usa este mismo servicio: con la reescritura apagada no envía "
-            "nada y, si falla, no inserta texto sin traducir."
+            "La tecla de mejorar y la de mejorar y traducir usan este servicio; dictar a secas "
+            "nunca lo usa. Con el asistente apagado no se envía nada y, si falla al traducir, "
+            "no se inserta texto sin traducir."
         )
         self.aclaracion_de_traduccion.setWordWrap(True)
         formulario = QFormLayout(self)

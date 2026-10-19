@@ -90,7 +90,10 @@ class PasoTecla(PasoDelAsistente):
 
     def _avisar_que_no_existe(self, atajo: str, teclas: set[int]) -> None:
         nombre = " + ".join(teclas_de(atajo)) or atajo
-        otras = [str(self._ajustes.obtener(c)) for c in ("atajo.alternar", "atajo.traducir")]
+        otras = [
+            str(self._ajustes.obtener(c))
+            for c in ("atajo.alternar", "atajo.traducir", "atajo.mejorar")
+        ]
         propuesta = proponer_tecla(teclas, excluir=otras)
         self.aviso.setText(f"Tu teclado no tiene la tecla «{nombre}», así que no podrías usarla.")
         self._propuesta = propuesta or ""

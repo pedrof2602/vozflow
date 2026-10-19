@@ -224,7 +224,7 @@ def test_no_se_puede_iniciar_dos_veces_y_se_puede_volver_a_iniciar_tras_detener(
 # ---- la configuración por defecto ----------------------------------------------------------------------------------------
 
 
-def test_crear_escucha_arma_gnome_para_alternar_y_evdev_para_mantener_y_traducir() -> None:
+def test_crear_escucha_arma_gnome_para_alternar_y_evdev_para_las_de_mantener() -> None:
     escucha = crear_escucha()
 
     assert isinstance(escucha, EscuchaCompuesta)
@@ -232,7 +232,13 @@ def test_crear_escucha_arma_gnome_para_alternar_y_evdev_para_mantener_y_traducir
         accion: [f().__class__.__name__ for f in fabricas]
         for accion, fabricas in escucha.candidatas.items()
     }
-    assert nombres == {A: ["EscuchaDeGnome"], M: ["EscuchaEvdev"], T: ["EscuchaEvdev"]}
+    mejorar = AccionDeAtajo.MEJORAR
+    assert nombres == {
+        A: ["EscuchaDeGnome"],
+        M: ["EscuchaEvdev"],
+        T: ["EscuchaEvdev"],
+        mejorar: ["EscuchaEvdev"],
+    }
 
 
 # ---- traducir (lote 6) ----------------------------------------------------------------------------
@@ -281,3 +287,12 @@ def test_el_respaldo_de_un_grupo_se_prueba_entero() -> None:
     escucha.iniciar({M: "RightCtrl", T: "RightAlt"}, lambda _: None)
 
     assert bueno.atajos == {M: "RightCtrl", T: "RightAlt"}
+
+
+def test_la_tecla_de_mejorar_se_escucha_con_el_teclado_como_las_otras_de_mantener() -> None:
+    from vozflow.atajos import crear_escucha
+    from vozflow.atajos.puerto import AccionDeAtajo
+
+    escucha = crear_escucha()
+
+    assert escucha.candidatas[AccionDeAtajo.MEJORAR] == escucha.candidatas[AccionDeAtajo.MANTENER]

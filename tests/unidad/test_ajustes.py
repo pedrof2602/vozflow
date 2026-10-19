@@ -27,6 +27,7 @@ POR_DEFECTO = {
     "reescritura.activa": False,
     "interfaz.indicador": True,
     "atajo.traducir": "RightAlt",
+    "atajo.mejorar": "RightShift",
     "traduccion.idioma": "inglés",
     "interfaz.tema": "auto",
     "asistente.hecho": False,
@@ -75,7 +76,10 @@ def test_el_audio_por_defecto_es_el_predeterminado_del_sistema(ajustes: AjustesR
         ("reescritura.activa", True),
         ("interfaz.indicador", False),
         ("atajo.traducir", "F10"),
-        ("atajo.traducir", "RightShift"),
+        # 003: Shift derecho es ahora la tecla de mejorar; un modificador solo también sirve acá.
+        ("atajo.traducir", "LeftShift"),
+        ("atajo.mejorar", "F11"),
+        ("atajo.mejorar", "LeftAlt"),
         ("traduccion.idioma", "portugués"),
         ("traduccion.idioma", "chino mandarín"),
         ("traduccion.idioma", "es"),
@@ -145,6 +149,9 @@ def test_restablecer_vuelve_al_defecto(ajustes: AjustesRepo) -> None:
         ("atajo.traducir", "TeclaQueNoExiste"),
         ("atajo.traducir", "RightCtrl"),  # es la de mantener
         ("atajo.traducir", "<Control><Alt>space"),  # es la de alternar
+        ("atajo.mejorar", ""),
+        ("atajo.mejorar", "TeclaQueNoExiste"),
+        ("atajo.mejorar", "<Control><Alt>space"),
         ("traduccion.idioma", ""),
         ("traduccion.idioma", "   "),
         ("traduccion.idioma", "x"),
@@ -198,7 +205,8 @@ def test_cargar_arma_la_foto_de_los_ajustes(ajustes: AjustesRepo) -> None:
     assert foto.atajos() == {
         AccionDeAtajo.MANTENER: "F9",
         AccionDeAtajo.ALTERNAR: "<Control><Alt>space",
-        AccionDeAtajo.TRADUCIR: "RightAlt",  # la tercera tecla (lote 6)
+        AccionDeAtajo.TRADUCIR: "RightAlt",  # mejorar y traducir (003)
+        AccionDeAtajo.MEJORAR: "RightShift",  # solo mejorar (003)
     }
     assert (foto.modelo, foto.hilos, foto.idioma, foto.dispositivo) == ("small", 4, None, None)
 
@@ -311,3 +319,57 @@ def test_se_puede_cambiar_la_tecla_de_traducir_solo_para_esta_ejecucion(
 
     assert foto.atajo_traducir == "F11" and foto.atajo_mantener == "RightCtrl"
     assert ajustes.obtener("atajo.traducir") == "RightAlt"
+
+
+# ---- la tecla de mejorar (003) ---------------------------------------------------------------------------------
+
+
+def test_las_cuatro_teclas_se_cambian_juntas(ajustes: AjustesRepo) -> None:
+    ajustes.establecer_atajos("F9", "<Control><Alt>d", "F10", "F11")
+
+    assert ajustes.obtener("atajo.mejorar") == "F11"
+    assert ajustes.obtener("atajo.traducir") == "F10"
+    assert ajustes.obtener("atajo.mantener") == "F9"
+
+
+def test_validar_devuelve_los_cuatro_atajos_normalizados(ajustes: AjustesRepo) -> None:
+    validos = ajustes.validar_atajos("F9", "Ctrl+Alt+D", "F10", "F11")
+
+    assert validos == ("F9", "<Control><Alt>d", "F10", "F11")
+
+
+def test_sin_indicar_la_de_mejorar_se_conserva_la_que_habia(ajustes: AjustesRepo) -> None:
+    ajustes.establecer("atajo.mejorar", "F11")
+
+    ajustes.establecer_atajos("F9", "<Control><Alt>d")
+
+    assert ajustes.obtener("atajo.mejorar") == "F11"
+
+
+@pytest.mark.parametrize(
+    "repetida",
+    [("F9", "<Control><Alt>d", "F10", "F9"), ("F9", "<Control><Alt>d", "F10", "F10"),
+     ("F9", "<Control><Alt>d", "F10", "<Control><Alt>d")],
+)  # fmt: skip
+def test_las_cuatro_teclas_tienen_que_ser_distintas(
+    ajustes: AjustesRepo, repetida: tuple[str, str, str, str]
+) -> None:
+    with pytest.raises(DatoInvalido, match="distint"):
+        ajustes.validar_atajos(*repetida)
+
+
+def test_si_la_de_mejorar_falla_no_se_guarda_ninguna(ajustes: AjustesRepo) -> None:
+    with pytest.raises(DatoInvalido):
+        ajustes.establecer_atajos("F9", "<Control><Alt>d", "F10", "TeclaQueNoExiste")
+
+    assert ajustes.obtener("atajo.mantener") == "RightCtrl"
+    assert ajustes.obtener("atajo.mejorar") == "RightShift"
+
+
+def test_se_puede_cambiar_la_tecla_de_mejorar_solo_para_esta_ejecucion(
+    ajustes: AjustesRepo,
+) -> None:
+    foto = ajustes.cargar().con_atajos(mantener=None, alternar=None, mejorar="F11")
+
+    assert foto.atajo_mejorar == "F11" and foto.atajos()[AccionDeAtajo.MEJORAR] == "F11"
+    assert ajustes.obtener("atajo.mejorar") == "RightShift"

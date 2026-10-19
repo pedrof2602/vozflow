@@ -48,11 +48,18 @@ class Indicador(QWidget):
         self._ocultar_error.setSingleShot(True)
         self._ocultar_error.timeout.connect(self.hide)
 
-    def establecer_estado(self, estado: EstadoDelDictado, traduciendo_a: str | None = None) -> None:
+    def establecer_estado(
+        self,
+        estado: EstadoDelDictado,
+        traduciendo_a: str | None = None,
+        mejorando: bool = False,
+    ) -> None:
         vista = vista_de(estado)
         self.texto, self._color = vista.texto, QColor(vista.color)
         if traduciendo_a and estado is not EstadoDelDictado.INACTIVO:
             self.texto = f"{vista.texto} → {traduciendo_a}"
+        elif mejorando and estado is not EstadoDelDictado.INACTIVO:
+            self.texto = f"{vista.texto} · IA"
         self._ocultar_error.stop()
         if estado is EstadoDelDictado.INACTIVO or not self._activo():
             self.hide()

@@ -156,3 +156,44 @@ def test_al_borrar_un_modo_sus_aplicaciones_pasan_al_general_en_la_tabla(qtbot: 
     pagina.borrar_modo()
 
     assert pagina.tabla.item(0, 1).text() == "General"
+
+
+# ---- sin interruptor de mejorar (003, RT-006) ---------------------------------------------------------------
+
+
+def test_los_modos_ya_no_tienen_el_interruptor_de_mejorar_con_ia(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    assert not hasattr(pagina, "check_reescribir")
+
+
+def test_guardar_un_modo_no_toca_el_valor_viejo_de_reescribir(qtbot: QtBot) -> None:
+    pagina, modos, _ = _pagina(qtbot)
+    modo = modos.obtener("Documentos")
+    assert modo is not None
+    modos.actualizar(modo.id, reescribir=True)  # un valor de antes de la 003
+    pagina.seleccionar("Documentos")
+    pagina.campo_instruccion.setPlainText("tono profesional")
+
+    pagina.guardar_modo()
+
+    guardado = modos.obtener("Documentos")
+    assert guardado is not None and guardado.reescribir is True
+    assert guardado.instruccion == "tono profesional"
+
+
+def test_un_modo_nuevo_se_crea_sin_reescritura(qtbot: QtBot) -> None:
+    pagina, modos, _ = _pagina(qtbot)
+    pagina.nuevo()
+    pagina.campo_nombre.setText("Trabajo")
+
+    pagina.guardar_modo()
+
+    creado = modos.obtener("Trabajo")
+    assert creado is not None and creado.reescribir is False
+
+
+def test_el_estilo_explica_que_se_usa_con_las_teclas_de_ia(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    assert "tecla" in pagina.campo_instruccion.toolTip().lower()

@@ -36,8 +36,10 @@ _BASE = (
 
 
 _BASE_TRADUCCION = (
-    "Sos un traductor de texto dictado por voz. Traducí todo el texto al idioma {idioma}, de "
-    "forma fiel y natural, como la diría un hablante nativo.\n"
+    "Sos un asistente que mejora y traduce texto dictado por voz, en un solo paso. Primero "
+    "mejorá la redacción: corregí la gramática, la puntuación y las frases torpes. Después "
+    "traducí todo el texto al idioma {idioma}, de forma fiel y natural, como la diría un "
+    "hablante nativo.\n"
     "- Traducí todo el texto: no dejes partes sin traducir ni resumas nada.\n"
     "- Si el texto ya está en {idioma}, dejalo como está (solo corregí lo evidente).\n"
     "- No agregues contenido, datos, saludos ni explicaciones que no estén en el texto.\n"

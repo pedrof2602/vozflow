@@ -98,7 +98,9 @@ def test_arranca_carga_el_modelo_escucha_los_atajos_por_defecto_y_se_apaga_limpi
 
     assert codigo == CODIGO_OK
     assert m.motor.veces_cargado >= 1 and m.motor.cargado is False  # lo libera al apagar
-    assert m.atajos_pedidos == {M: "RightCtrl", A: "<Control><Alt>space", T: "RightAlt"}
+    assert m.atajos_pedidos == {
+        M: "RightCtrl", A: "<Control><Alt>space", T: "RightAlt", AccionDeAtajo.MEJORAR: "RightShift",
+    }  # fmt: skip
     assert "RightCtrl" in capsys.readouterr().err
 
 
@@ -111,7 +113,18 @@ def test_los_atajos_se_pueden_cambiar_por_la_linea_de_comandos() -> None:
 
     m.correr("--mantener", "F9", "--alternar", "<Control><Alt>d")
 
-    assert m.atajos_pedidos == {M: "F9", A: "<Control><Alt>d", T: "RightAlt"}
+    assert m.atajos_pedidos == {
+        M: "F9", A: "<Control><Alt>d", T: "RightAlt", AccionDeAtajo.MEJORAR: "RightShift",
+    }  # fmt: skip
+
+
+def test_la_tecla_de_mejorar_se_puede_cambiar_por_la_linea_de_comandos() -> None:
+    m = Montaje()
+
+    m.correr("--mejorar", "F11")
+
+    assert m.atajos_pedidos[AccionDeAtajo.MEJORAR] == "F11"
+    assert m.atajos_pedidos[T] == "RightAlt"
 
 
 def test_muestra_el_estado_por_consola_sin_mostrar_lo_dictado(

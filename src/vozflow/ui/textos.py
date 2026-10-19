@@ -52,9 +52,13 @@ TEXTOS: dict[str, Texto] = {
         "Tecla para empezar y terminar",
         "Apretala una vez para empezar a dictar y otra vez para terminar.",
     ),
+    "atajo.mejorar": Texto(
+        "Tecla para mejorar",
+        "Mantenela apretada y hablá: el asistente de IA pule el texto antes de pegarlo.",
+    ),
     "atajo.traducir": Texto(
-        "Tecla para dictar y traducir",
-        "Mantenela apretada, hablá, y se pega el texto ya traducido.",
+        "Tecla para mejorar y traducir",
+        "Mantenela apretada y hablá: el asistente de IA pule el texto y lo traduce.",
     ),
     "traduccion.idioma": Texto(
         "Traducir al idioma",
@@ -100,13 +104,9 @@ TEXTOS: dict[str, Texto] = {
         "Comandos de voz",
         "Decí «nueva línea» o «punto» y se escribe el signo, no la palabra.",
     ),
-    "modo.reescribir": Texto(
-        "Mejorar con el asistente de IA",
-        "Pasa el texto por el asistente de IA, si lo tenés prendido.",
-    ),
     "modo.estilo": Texto(
-        "Estilo",
-        "Una indicación para el asistente de IA, por ejemplo «formal y breve».",
+        "Estilo para el asistente de IA",
+        "Una indicación como «formal y breve». Se usa con las teclas de mejorar.",
     ),
     "modo.pegado": Texto(
         "Cómo se pega",

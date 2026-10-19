@@ -132,26 +132,30 @@ def cambiar_tecla_para_dictar(
 
     Lanza ``DatoInvalido`` o uno de ``ERRORES_DE_LA_ESCUCHA`` (y no guarda nada) si no se puede.
     """
-    mantener, alternar, traducir = ajustes.validar_atajos(
-        atajo, ajustes.obtener("atajo.alternar"), ajustes.obtener("atajo.traducir")
+    mantener, alternar, traducir, mejorar = ajustes.validar_atajos(
+        atajo,
+        ajustes.obtener("atajo.alternar"),
+        ajustes.obtener("atajo.traducir"),
+        ajustes.obtener("atajo.mejorar"),
     )
     aplicar_en_vivo(
         {
             AccionDeAtajo.MANTENER: mantener,
             AccionDeAtajo.ALTERNAR: alternar,
             AccionDeAtajo.TRADUCIR: traducir,
+            AccionDeAtajo.MEJORAR: mejorar,
         }
     )
-    ajustes.establecer_atajos(mantener, alternar, traducir)
+    ajustes.establecer_atajos(mantener, alternar, traducir, mejorar)
 
 
 class PaginaTeclas(PaginaBase):
-    """«Otras teclas» (Avanzado): empezar y terminar, y dictar y traducir.
+    """«Otras teclas» (Avanzado): mejorar, mejorar y traducir, y empezar y terminar.
 
     La tecla para dictar está en «Dictado»; aquí se validan juntas las tres, así que nunca se pisan.
     """
 
-    CLAVES = ("atajo.alternar", "atajo.traducir")
+    CLAVES = ("atajo.alternar", "atajo.traducir", "atajo.mejorar")
 
     def __init__(
         self,
@@ -163,15 +167,22 @@ class PaginaTeclas(PaginaBase):
         self._aplicar_en_vivo = aplicar_en_vivo
         self.campo_alternar = CampoDeAtajo(permitir_modificador_solo=False)
         self.campo_traducir = CampoDeAtajo(permitir_modificador_solo=True)
-        self._teclas = {"alternar": FilaDeTeclas(), "traducir": FilaDeTeclas()}
+        self.campo_mejorar = CampoDeAtajo(permitir_modificador_solo=True)
+        self._teclas = {
+            "alternar": FilaDeTeclas(),
+            "traducir": FilaDeTeclas(),
+            "mejorar": FilaDeTeclas(),
+        }
         self.campo_alternar.atajo_mostrado.connect(self._teclas["alternar"].establecer)
         self.campo_traducir.atajo_mostrado.connect(self._teclas["traducir"].establecer)
+        self.campo_mejorar.atajo_mostrado.connect(self._teclas["mejorar"].establecer)
         self.boton_aplicar = QPushButton("Aplicar")
         self.boton_aplicar.setProperty("principal", True)
         self.boton_aplicar.clicked.connect(lambda _=False: self.aplicar())
         self.filas = {
-            "atajo.alternar": self._fila("atajo.alternar", self.campo_alternar, "alternar"),
+            "atajo.mejorar": self._fila("atajo.mejorar", self.campo_mejorar, "mejorar"),
             "atajo.traducir": self._fila("atajo.traducir", self.campo_traducir, "traducir"),
+            "atajo.alternar": self._fila("atajo.alternar", self.campo_alternar, "alternar"),
         }
         columna = QVBoxLayout(self)
         for fila in self.filas.values():
@@ -208,19 +219,21 @@ class PaginaTeclas(PaginaBase):
                 self._ajustes.obtener("atajo.mantener"),
                 self.campo_alternar.atajo,
                 self.campo_traducir.atajo,
+                self.campo_mejorar.atajo,
             )
             if nuevos == self._actuales():
                 self.avisar("No hay cambios que aplicar.")
                 return
-            mantener, alternar, traducir = nuevos
+            mantener, alternar, traducir, mejorar = nuevos
             self._aplicar_en_vivo(
                 {
                     AccionDeAtajo.MANTENER: mantener,
                     AccionDeAtajo.ALTERNAR: alternar,
                     AccionDeAtajo.TRADUCIR: traducir,
+                    AccionDeAtajo.MEJORAR: mejorar,
                 }
             )
-            self._ajustes.establecer_atajos(mantener, alternar, traducir)
+            self._ajustes.establecer_atajos(mantener, alternar, traducir, mejorar)
         except (DatoInvalido, *ERRORES_DE_LA_ESCUCHA) as error:
             self.avisar(str(error), error=True)
             return
@@ -228,20 +241,26 @@ class PaginaTeclas(PaginaBase):
         self.avisar("Listo: las teclas ya funcionan, sin reiniciar.")
 
     def _restablecer(self, clave: str) -> None:
-        campo = self.campo_alternar if clave == "atajo.alternar" else self.campo_traducir
-        campo.atajo = str(self._ajustes.defecto(clave))
+        campos = {
+            "atajo.alternar": self.campo_alternar,
+            "atajo.traducir": self.campo_traducir,
+            "atajo.mejorar": self.campo_mejorar,
+        }
+        campos[clave].atajo = str(self._ajustes.defecto(clave))
         self.aplicar()
 
-    def _actuales(self) -> tuple[str, str, str]:
+    def _actuales(self) -> tuple[str, str, str, str]:
         return (
             self._ajustes.obtener("atajo.mantener"),
             self._ajustes.obtener("atajo.alternar"),
             self._ajustes.obtener("atajo.traducir"),
+            self._ajustes.obtener("atajo.mejorar"),
         )
 
     def _mostrar_actuales(self) -> None:
-        _, alternar, traducir = self._actuales()
+        _, alternar, traducir, mejorar = self._actuales()
         self.campo_alternar.atajo = alternar
         self.campo_traducir.atajo = traducir
+        self.campo_mejorar.atajo = mejorar
         for fila in getattr(self, "filas", {}).values():
             fila.refrescar()

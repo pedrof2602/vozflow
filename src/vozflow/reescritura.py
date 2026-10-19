@@ -69,23 +69,23 @@ class ReescrituraDeBase:
     def intentar(
         self, texto: str, modo: Modo, traducir_a: str | None = None
     ) -> ResultadoReescritura:
-        """Reescribe (si el modo lo pide) o traduce (si se pidió con la tecla de traducir)."""
+        """Mejora el texto (tecla de mejorar) o lo mejora y traduce (tecla de traducir).
+
+        Solo se llama cuando la persona pidió IA con una de esas teclas: dictar a secas nunca llega
+        acá (003). El interruptor ``modo.reescribir`` ya no decide nada.
+        """
         traduciendo = traducir_a is not None
-        if not traduciendo and not modo.reescribir:
-            return ResultadoReescritura(texto)  # nada que hacer: ni siquiera se prepara un cliente
         if not self._ajustes.obtener("reescritura.activa"):
-            if not traduciendo:
-                return ResultadoReescritura(texto)
             return self._sin_cambios(
                 texto,
-                "La traducción necesita la reescritura encendida (Ajustes → Reescritura)",
-                traduciendo=True,
+                "El asistente de IA está apagado (Ajustes → Avanzado → Asistente de IA)",
+                traduciendo=traduciendo,
             )
         proveedor = self._proveedores.activo()
         if proveedor is None:
             return self._sin_cambios(
                 texto,
-                "La reescritura está activada pero no hay un proveedor",
+                "El asistente de IA está prendido pero no hay un proveedor elegido",
                 traduciendo=traduciendo,
             )
         try:
@@ -108,7 +108,7 @@ class ReescrituraDeBase:
         except Exception:
             _registro.exception("Falló la reescritura de forma inesperada")
             return self._sin_cambios(
-                texto, "La traducción falló" if traduciendo else "La reescritura falló",
+                texto, "La traducción falló" if traduciendo else "La mejora falló",
                 traduciendo=traduciendo,
             )  # fmt: skip
         return ResultadoReescritura(reescrito, proveedor.id)
@@ -128,5 +128,5 @@ class ReescrituraDeBase:
                 fallo=True,
             )
         return ResultadoReescritura(
-            texto, aviso=f"{motivo}. Se insertó el texto sin reescribir.", fallo=True
+            texto, aviso=f"{motivo}. Se insertó el texto sin mejorar.", fallo=True
         )

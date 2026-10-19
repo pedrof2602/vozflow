@@ -7,7 +7,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as EsperaAgotada
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import Literal, Protocol
 
 import numpy as np
 import numpy.typing as npt
@@ -188,7 +188,21 @@ _EVENTOS = {
     (AccionDeAtajo.MANTENER, FaseDeAtajo.SOLTADO): Evento.SOLTAR,
     (AccionDeAtajo.TRADUCIR, FaseDeAtajo.PULSADO): Evento.PULSAR,
     (AccionDeAtajo.TRADUCIR, FaseDeAtajo.SOLTADO): Evento.SOLTAR,
+    (AccionDeAtajo.MEJORAR, FaseDeAtajo.PULSADO): Evento.PULSAR,
+    (AccionDeAtajo.MEJORAR, FaseDeAtajo.SOLTADO): Evento.SOLTAR,
     (AccionDeAtajo.ALTERNAR, FaseDeAtajo.PULSADO): Evento.ALTERNAR,
+}
+
+
+Intencion = Literal["dictar", "mejorar", "traducir"]
+"""Qué se le pide al dictado, según la tecla que lo empezó (003): dictar nunca usa la IA, mejorar
+la usa para pulir el texto y traducir la usa para pulirlo y traducirlo."""
+
+_INTENCIONES: dict[AccionDeAtajo, Intencion] = {
+    AccionDeAtajo.MANTENER: "dictar",
+    AccionDeAtajo.ALTERNAR: "dictar",
+    AccionDeAtajo.MEJORAR: "mejorar",
+    AccionDeAtajo.TRADUCIR: "traducir",
 }
 
 
@@ -269,6 +283,7 @@ class Aplicacion:
         self._cancelado = False
         self.pausada = False
         self.idioma_en_curso: str | None = None
+        self.intencion_en_curso: Intencion | None = None
         """El idioma de destino mientras dura un dictado hecho con la tecla de traducir."""
         self._inicio_s = 0.0
         self._ventana_consultada: Future[InfoVentana | None] | None = None
@@ -337,12 +352,13 @@ class Aplicacion:
                 return  # en pausa no se empiezan dictados nuevos
             if traducido is Evento.SOLTAR and escuchando and evento.accion != self._accion_inicial:
                 return  # solo la tecla que empezó puede terminar (soltar otra no corta nada)
-            anterior = self.idioma_en_curso
+            anterior = (self.idioma_en_curso, self.intencion_en_curso)
             if not escuchando and traducido is not Evento.SOLTAR:
-                # Antes de cambiar el estado: quien lo escucha ya tiene que ver el idioma.
+                # Antes de cambiar el estado: quien lo escucha ya tiene que ver qué se hace.
                 self.idioma_en_curso = self._idioma_si_traduce(evento.accion)
+                self.intencion_en_curso = _INTENCIONES[evento.accion]
             if not self._dictado.manejar(traducido):
-                self.idioma_en_curso = anterior
+                self.idioma_en_curso, self.intencion_en_curso = anterior
                 return
             if self._dictado.estado is EstadoDelDictado.ESCUCHANDO:
                 self._empezar(evento.accion)
@@ -366,7 +382,7 @@ class Aplicacion:
         self._ventana_consultada = self._consultar_ventana()
         self._hilo = threading.Thread(
             target=self._dictar,
-            args=(accion is AccionDeAtajo.TRADUCIR,),
+            args=(_INTENCIONES[accion],),
             name="vozflow-dictado",
             daemon=True,
         )
@@ -387,7 +403,7 @@ class Aplicacion:
 
     # ---- un dictado --------------------------------------------------------------------------
 
-    def _dictar(self, traduciendo: bool) -> None:
+    def _dictar(self, intencion: Intencion) -> None:
         self._guardado = False
         resultado: ResultadoDictado | None = None
         try:
@@ -401,7 +417,7 @@ class Aplicacion:
                 esperar=self._esperar_el_fin,
                 al_empezar=self._al_empezar,
             )
-            self._insertar(resultado, traduciendo)
+            self._insertar(resultado, intencion)
         except Exception as error:
             if resultado is not None and not self._guardado:
                 # Hubo texto y algo falló después: queda en el historial para no perderlo.
@@ -427,7 +443,8 @@ class Aplicacion:
                 self.ultimo_arranque_ms,
             )
 
-    def _insertar(self, dictado: ResultadoDictado, traduciendo: bool) -> None:
+    def _insertar(self, dictado: ResultadoDictado, intencion: Intencion) -> None:
+        traduciendo = intencion == "traducir"
         transcripcion = dictado.transcripcion
         ventana = self._ventana_activa()
         resolucion = self._configuracion.resolver(ventana.aplicacion if ventana else None)
@@ -440,7 +457,7 @@ class Aplicacion:
             self._evento(Evento.SIN_VOZ)
             return
         texto, proveedor = limpio.texto, ""
-        if traduciendo or self._reescritura is not None:
+        if intencion != "dictar":  # dictar nunca usa la IA ni manda texto afuera (003, RT-002)
             traducir_a = self._configuracion.idioma_de_traduccion() if traduciendo else None
             reescrito = self._reescribir(texto, resolucion.modo, traducir_a)
             if traduciendo and reescrito.fallo:
@@ -467,10 +484,16 @@ class Aplicacion:
 
     def _reescribir(self, texto: str, modo: Modo, traducir_a: str | None) -> ResultadoReescritura:
         if self._reescritura is None:
+            if traducir_a is not None:
+                return ResultadoReescritura(
+                    texto,
+                    aviso="No se pudo traducir: el asistente de IA no está configurado. "
+                    "No se insertó nada; el texto quedó en el historial.",
+                    fallo=True,
+                )
             return ResultadoReescritura(
                 texto,
-                aviso="No se pudo traducir: la reescritura no está configurada. "
-                "No se insertó nada; el texto quedó en el historial.",
+                aviso="El asistente de IA no está configurado. Se insertó el texto sin mejorar.",
                 fallo=True,
             )
         return self._reescritura.intentar(texto, modo, traducir_a)
@@ -544,6 +567,7 @@ class Aplicacion:
     def _publicar(self, anterior: EstadoDelDictado, nuevo: EstadoDelDictado) -> None:
         if nuevo in (EstadoDelDictado.INACTIVO, EstadoDelDictado.ERROR):
             self.idioma_en_curso = None
+            self.intencion_en_curso = None
         if self._al_cambiar_estado is not None:
             self._al_cambiar_estado(nuevo)
 

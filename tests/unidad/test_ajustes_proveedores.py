@@ -239,7 +239,10 @@ def test_un_idioma_vacio_se_rechaza_con_un_aviso(qtbot: QtBot) -> None:
 def test_explica_que_la_traduccion_usa_el_mismo_servicio(qtbot: QtBot) -> None:
     pagina, _, _ = _pagina(qtbot)
 
-    assert "tecla de traducir" in pagina.aclaracion_de_traduccion.text().lower()
+    texto = pagina.aclaracion_de_traduccion.text().lower()
+    # 003: las dos teclas de IA usan este servicio; dictar a secas nunca lo usa.
+    assert "tecla de mejorar" in texto and "mejorar y traducir" in texto
+    assert "dictar" in texto and "nunca" in texto
 
 
 # ---- presentación como función opcional y privacidad (002, RP-020) --------------------------------------------

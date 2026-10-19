@@ -320,7 +320,7 @@ def _proveedor_con(a: Argumentos, ctx: Contexto, gestion: GestionDeProveedores) 
     salida = ctx.salida
     if a.accion == "listar":
         salida(f"Reescritura: {'encendida' if gestion.reescritura_encendida() else 'apagada'}")
-        salida(f"La tecla de traducir traduce al: {gestion.idioma_de_traduccion()}")
+        salida(f"La tecla de mejorar y traducir traduce al: {gestion.idioma_de_traduccion()}")
         for estado in gestion.estado():
             salida(_linea_de_proveedor(estado))
     elif a.accion == "configurar":
@@ -345,7 +345,9 @@ def _proveedor_con(a: Argumentos, ctx: Contexto, gestion: GestionDeProveedores) 
             salida(f"La tecla de traducir traduce al: {gestion.idioma_de_traduccion()}")
         else:
             gestion.establecer_idioma_de_traduccion(a.idioma)
-            salida(f"La tecla de traducir ahora traduce al: {gestion.idioma_de_traduccion()}")
+            salida(
+                f"La tecla de mejorar y traducir ahora traduce al: {gestion.idioma_de_traduccion()}"
+            )
     else:
         salida(f"Funciona: {gestion.probar(a.id)}")
 

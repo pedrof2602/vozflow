@@ -37,7 +37,6 @@ class PaginaModos(PaginaBase):
         self.check_muletillas = Interruptor(texto_de("modo.muletillas").titulo)
         self.check_puntuacion = Interruptor(texto_de("modo.puntuacion").titulo)
         self.check_comandos = Interruptor(texto_de("modo.comandos").titulo)
-        self.check_reescribir = Interruptor(texto_de("modo.reescribir").titulo)
         self.campo_instruccion = QPlainTextEdit()
         self.campo_instruccion.setPlaceholderText(
             "Indicación de estilo para la reescritura (opcional)"
@@ -54,7 +53,6 @@ class PaginaModos(PaginaBase):
             (self.check_muletillas, "modo.muletillas"),
             (self.check_puntuacion, "modo.puntuacion"),
             (self.check_comandos, "modo.comandos"),
-            (self.check_reescribir, "modo.reescribir"),
             (self.campo_instruccion, "modo.estilo"),
             (self.combo_pegado, "modo.pegado"),
             (self.combo_salto, "modo.saltos"),
@@ -73,7 +71,6 @@ class PaginaModos(PaginaBase):
         formulario.addRow(self.check_muletillas)
         formulario.addRow(self.check_puntuacion)
         formulario.addRow(self.check_comandos)
-        formulario.addRow(self.check_reescribir)
         formulario.addRow(texto_de("modo.estilo").titulo, self.campo_instruccion)
         formulario.addRow(texto_de("modo.pegado").titulo, self.combo_pegado)
         formulario.addRow(texto_de("modo.saltos").titulo, self.combo_salto)
@@ -134,7 +131,6 @@ class PaginaModos(PaginaBase):
         self.check_muletillas.setChecked(modo.quitar_muletillas)
         self.check_puntuacion.setChecked(modo.puntuacion_automatica)
         self.check_comandos.setChecked(modo.comandos_de_voz)
-        self.check_reescribir.setChecked(modo.reescribir)
         self.campo_instruccion.setPlainText(modo.instruccion)
         self.combo_pegado.setCurrentIndex(self.combo_pegado.findData(modo.tipo_pegado))
         self.combo_salto.setCurrentIndex(self.combo_salto.findData(modo.salto_de_linea))
@@ -150,7 +146,6 @@ class PaginaModos(PaginaBase):
         self.campo_nombre.clear()
         for casilla in (self.check_muletillas, self.check_puntuacion, self.check_comandos):
             casilla.setChecked(True)
-        self.check_reescribir.setChecked(False)
         self.campo_instruccion.clear()
         self.combo_pegado.setCurrentIndex(self.combo_pegado.findData("automatico"))
         self.combo_salto.setCurrentIndex(self.combo_salto.findData("conservar"))
@@ -162,7 +157,6 @@ class PaginaModos(PaginaBase):
             "quitar_muletillas": self.check_muletillas.isChecked(),
             "puntuacion_automatica": self.check_puntuacion.isChecked(),
             "comandos_de_voz": self.check_comandos.isChecked(),
-            "reescribir": self.check_reescribir.isChecked(),
             "instruccion": self.campo_instruccion.toPlainText(),
             "tipo_pegado": self.combo_pegado.currentData(),
             "salto_de_linea": self.combo_salto.currentData(),

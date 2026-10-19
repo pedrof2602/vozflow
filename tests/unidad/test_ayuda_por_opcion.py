@@ -47,7 +47,6 @@ CON_PISTA = [
     ("Modos", "check_muletillas", "modo.muletillas"),
     ("Modos", "check_puntuacion", "modo.puntuacion"),
     ("Modos", "check_comandos", "modo.comandos"),
-    ("Modos", "check_reescribir", "modo.reescribir"),
     ("Modos", "campo_instruccion", "modo.estilo"),
     ("Modos", "combo_pegado", "modo.pegado"),
     ("Modos", "combo_salto", "modo.saltos"),
