@@ -20,8 +20,14 @@ from vozflow.__main__ import Dependencias, DependenciasDelServicio
 from vozflow.aplicacion import Aplicacion
 from vozflow.atajos.puerto import AccionDeAtajo
 from vozflow.audio.captura import listar_dispositivos
-from vozflow.autoinicio import fijar_plataforma
+from vozflow.autoinicio import (
+    activar_autoinicio,
+    autoinicio_activo,
+    desactivar_autoinicio,
+    fijar_plataforma,
+)
 from vozflow.configuracion import ConfiguracionDeBase
+from vozflow.escritorio import argumentos_de_inicio
 from vozflow.insercion.portapapeles import PortapapelesWayland
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.historial import HistorialRepo
@@ -36,6 +42,18 @@ _registro = logging.getLogger(__name__)
 
 def _directorio_del_candado() -> Path:
     return Path(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir())
+
+
+def _directorio_de_config() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+
+
+def _fijar_autoinicio(activo: bool) -> None:
+    config = _directorio_de_config()
+    if activo:
+        activar_autoinicio(config, argumentos_de_inicio())
+    else:
+        desactivar_autoinicio(config)
 
 
 def _directorio_del_tema() -> Path:
@@ -119,6 +137,8 @@ def arrancar_interfaz(
             insertor=insertor,
             listar_dispositivos=listar_dispositivos,
             aplicar_tema=aspecto.establecer_modo,
+            autoinicio_activo=lambda: autoinicio_activo(_directorio_de_config()),
+            fijar_autoinicio=_fijar_autoinicio,
         )
         interfaz = InterfazGrafica(
             controlador=_Controlador(aplicacion, app),

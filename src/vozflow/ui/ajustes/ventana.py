@@ -39,6 +39,7 @@ from vozflow.ui.ajustes.copia import PaginaCopia
 from vozflow.ui.ajustes.historial import PaginaHistorial
 from vozflow.ui.ajustes.modos import PaginaModos
 from vozflow.ui.ajustes.proveedores import PaginaProveedores
+from vozflow.ui.ajustes.sistema import PaginaSistema
 from vozflow.ui.ajustes.teclas import PaginaTeclas
 from vozflow.ui.ajustes.vocabulario import PaginaVocabulario
 from vozflow.ui.estado import VistaDeEstado, vista_de
@@ -65,6 +66,8 @@ class ContextoDeAjustes:
     insertor: Insertor
     listar_dispositivos: Callable[[], list[Dispositivo]]
     aplicar_tema: Callable[[str], None] = lambda modo: None
+    autoinicio_activo: Callable[[], bool] = lambda: False
+    fijar_autoinicio: Callable[[bool], None] = lambda activo: None
 
 
 def crear_paginas(
@@ -89,6 +92,7 @@ def crear_paginas(
             al_reinsertar,
         ),
         "Apariencia": PaginaApariencia(ajustes, contexto.aplicar_tema),
+        "Sistema": PaginaSistema(contexto.autoinicio_activo, contexto.fijar_autoinicio),
     }
 
 
@@ -101,6 +105,7 @@ GRUPOS_POR_DEFECTO = {
     "Reescritura": "INTELIGENCIA ARTIFICIAL",
     "Copia": "DATOS",
     "Apariencia": "APLICACIÓN",
+    "Sistema": "APLICACIÓN",
 }
 ORDEN_DE_GRUPOS = ["INICIO", "TEXTO", "DICTADO", "INTELIGENCIA ARTIFICIAL", "DATOS", "APLICACIÓN"]
 _ICONOS_POR_PAGINA = {
@@ -112,6 +117,7 @@ _ICONOS_POR_PAGINA = {
     "Reescritura": "reescritura",
     "Copia": "copia",
     "Apariencia": "ajustes",
+    "Sistema": "ajustes",
 }
 _DESCRIPCIONES_POR_DEFECTO = {
     "Historial": "Lo que dictaste, para buscarlo y volver a usarlo",
@@ -122,6 +128,7 @@ _DESCRIPCIONES_POR_DEFECTO = {
     "Reescritura": "Mejora y traducción con un modelo de lenguaje, solo si lo prendés",
     "Copia": "Exportar e importar tus datos",
     "Apariencia": "Tema claro, oscuro o el del sistema",
+    "Sistema": "Cómo arranca vozflow",
 }
 
 

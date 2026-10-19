@@ -130,7 +130,7 @@ def test_se_arman_todas_las_paginas_de_los_ajustes(qtbot: QtBot, tmp_path: Path)
     paginas = crear_paginas(_contexto(tmp_path), lambda accion: accion())
 
     assert list(paginas) == [
-        "Teclas", "Audio", "Modos", "Vocabulario", "Reescritura", "Copia", "Historial", "Apariencia"
+        "Teclas", "Audio", "Modos", "Vocabulario", "Reescritura", "Copia", "Historial", "Apariencia", "Sistema"
     ]  # fmt: skip
     for pagina in paginas.values():
         qtbot.addWidget(pagina)
@@ -280,7 +280,7 @@ def test_las_paginas_reales_quedan_agrupadas_como_en_la_guia(qtbot: QtBot, tmp_p
     qtbot.addWidget(ventana)
 
     assert ventana.nombres_de_paginas() == [
-        "Historial", "Modos", "Vocabulario", "Teclas", "Audio", "Reescritura", "Copia", "Apariencia",
+        "Historial", "Modos", "Vocabulario", "Teclas", "Audio", "Reescritura", "Copia", "Apariencia", "Sistema",
     ]  # fmt: skip
     assert ventana.etiquetas_de_grupo() == [
         "INICIO", "TEXTO", "DICTADO", "INTELIGENCIA ARTIFICIAL", "DATOS", "APLICACIÓN",
