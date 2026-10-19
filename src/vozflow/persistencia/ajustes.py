@@ -115,6 +115,8 @@ _CLAVES: dict[str, _Clave] = {
     "reescritura.activa": _Clave(False, _booleano),
     "interfaz.indicador": _Clave(True, _booleano),
     "interfaz.tema": _Clave("auto", _tema),
+    # Si el asistente de primer uso ya se completó o se salteó (002, RP-013).
+    "asistente.hecho": _Clave(False, _booleano),
 }
 
 

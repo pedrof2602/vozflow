@@ -123,6 +123,28 @@ ERRORES_DE_LA_ESCUCHA = (
 )
 
 
+def cambiar_tecla_para_dictar(
+    ajustes: AjustesRepo,
+    aplicar_en_vivo: Callable[[Mapping[AccionDeAtajo, str]], None],
+    atajo: str,
+) -> None:
+    """Prueba la tecla nueva en la escucha en vivo y recién entonces la guarda.
+
+    Lanza ``DatoInvalido`` o uno de ``ERRORES_DE_LA_ESCUCHA`` (y no guarda nada) si no se puede.
+    """
+    mantener, alternar, traducir = ajustes.validar_atajos(
+        atajo, ajustes.obtener("atajo.alternar"), ajustes.obtener("atajo.traducir")
+    )
+    aplicar_en_vivo(
+        {
+            AccionDeAtajo.MANTENER: mantener,
+            AccionDeAtajo.ALTERNAR: alternar,
+            AccionDeAtajo.TRADUCIR: traducir,
+        }
+    )
+    ajustes.establecer_atajos(mantener, alternar, traducir)
+
+
 class PaginaTeclas(PaginaBase):
     """«Otras teclas» (Avanzado): empezar y terminar, y dictar y traducir.
 

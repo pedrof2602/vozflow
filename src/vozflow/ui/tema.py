@@ -166,6 +166,7 @@ QLabel#titulo { font-size: 20px; font-weight: 600; }
 QLabel#seccion { font-size: 15px; font-weight: 600; }
 QLabel#descripcion, QLabel#subtitulo { color: $texto_atenuado; }
 QLabel#grupo { color: $texto_atenuado; font-size: 11px; font-weight: 600; padding: 10px 10px 4px 10px; }
+QLabel#comando { font-family: monospace; background: $campo; border: 1px solid $borde; border-radius: 6px; padding: 6px 8px; }
 QLabel[error="true"] { color: $error; }
 QLabel[exito="true"] { color: $exito; }
 QLabel[enlace="true"] { color: $enlace; }

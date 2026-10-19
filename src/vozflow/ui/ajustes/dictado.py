@@ -13,8 +13,13 @@ from vozflow.audio.captura import Dispositivo, listar_dispositivos
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.errores import DatoInvalido
 from vozflow.ui.ajustes.base import PaginaBase
-from vozflow.ui.ajustes.teclas import ERRORES_DE_LA_ESCUCHA, CampoDeAtajo
+from vozflow.ui.ajustes.teclas import (
+    ERRORES_DE_LA_ESCUCHA,
+    CampoDeAtajo,
+    cambiar_tecla_para_dictar,
+)
 from vozflow.ui.componentes import FilaDeAjuste, FilaDeTeclas, Interruptor
+from vozflow.ui.microfonos import llenar_combo_de_microfonos
 from vozflow.ui.textos import ayuda_de, texto_de
 
 _IDIOMAS = (("Automático", "automatico"), ("Español", "es"), ("Inglés", "en"))
@@ -90,19 +95,7 @@ class PaginaDictado(PaginaBase):
         for control in controles:
             control.blockSignals(True)
         guardado = str(self._ajustes.obtener("audio.dispositivo"))
-        self.combo_microfono.clear()
-        self.combo_microfono.addItem("Predeterminado del sistema", "")
-        try:
-            dispositivos = self._listar()
-        except Exception:  # sin sonido o sin permisos: la página igual tiene que abrir
-            dispositivos = []
-        nombres = [d.nombre for d in dispositivos]
-        for dispositivo in dispositivos:
-            marca = " (predeterminado)" if dispositivo.es_predeterminado else ""
-            self.combo_microfono.addItem(f"{dispositivo.nombre}{marca}", dispositivo.nombre)
-        if guardado and guardado not in nombres:  # un micrófono que hoy no está enchufado
-            self.combo_microfono.addItem(f"{guardado} (no conectado)", guardado)
-        self.combo_microfono.setCurrentIndex(max(0, self.combo_microfono.findData(guardado)))
+        llenar_combo_de_microfonos(self.combo_microfono, guardado, self._listar)
         self.combo_idioma.setCurrentIndex(
             self.combo_idioma.findData(self._ajustes.obtener("idioma.modo"))
         )
@@ -147,19 +140,7 @@ class PaginaDictado(PaginaBase):
     def _cambiar_tecla(self, atajo: str) -> bool:
         """Prueba la tecla nueva en la escucha en vivo y recién entonces la guarda."""
         try:
-            mantener, alternar, traducir = self._ajustes.validar_atajos(
-                atajo,
-                self._ajustes.obtener("atajo.alternar"),
-                self._ajustes.obtener("atajo.traducir"),
-            )
-            self._aplicar_atajos(
-                {
-                    AccionDeAtajo.MANTENER: mantener,
-                    AccionDeAtajo.ALTERNAR: alternar,
-                    AccionDeAtajo.TRADUCIR: traducir,
-                }
-            )
-            self._ajustes.establecer_atajos(mantener, alternar, traducir)
+            cambiar_tecla_para_dictar(self._ajustes, self._aplicar_atajos, atajo)
         except (DatoInvalido, *ERRORES_DE_LA_ESCUCHA) as error:
             self.avisar(str(error), error=True)
             self.recargar()

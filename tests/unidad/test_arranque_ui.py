@@ -233,13 +233,15 @@ def _interfaz(  # type: ignore[no-untyped-def]
     qtbot: QtBot,
     nivel: Callable[[], float] = lambda: 0.0,
     destino: Callable[[], str | None] = lambda: None,
+    asistente=None,
+    base=None,
 ):
     from tests.dobles import ReescritorFalso
     from tests.unidad.test_gestion_de_proveedores import Claves
     from tests.unidad.test_ventana_ajustes import Insertor, Portapapeles
     from vozflow.ui.ajustes.ventana import ContextoDeAjustes
 
-    base = abrir_base(":memory:")
+    base = base or abrir_base(":memory:")
     controlador = Controlador()
     contexto = ContextoDeAjustes(
         base=base,
@@ -258,6 +260,7 @@ def _interfaz(  # type: ignore[no-untyped-def]
         destino_de_traduccion=destino,
         bandeja_disponible=lambda: False,
         intervalo_de_nivel_ms=10,
+        asistente=asistente,
     )
     qtbot.addWidget(interfaz.ventana)
     qtbot.addWidget(interfaz.indicador)
@@ -381,3 +384,83 @@ def test_si_no_hay_traduccion_el_indicador_queda_como_siempre(qtbot: QtBot) -> N
     interfaz.puente.estado.emit(E.ESCUCHANDO)
 
     assert "→" not in interfaz.indicador.texto
+
+
+# ---- el asistente de primer uso (002, RP-007, RP-013) -----------------------------------------------------------
+
+
+def _asistente(qtbot: QtBot, ajustes: AjustesRepo):  # type: ignore[no-untyped-def]
+    from PySide6.QtWidgets import QLabel
+
+    from tests.unidad.test_asistente import PasoFalso
+    from vozflow.ui.asistente.ventana import VentanaAsistente
+
+    del QLabel
+    ventana = VentanaAsistente(lambda: [PasoFalso("Uno"), PasoFalso("Dos")], ajustes)
+    qtbot.addWidget(ventana)
+    return ventana
+
+
+def test_la_primera_vez_el_asistente_se_abre_solo(qtbot: QtBot) -> None:
+    base = abrir_base(":memory:")
+    ajustes = AjustesRepo(base)
+    asistente = _asistente(qtbot, ajustes)
+    interfaz, _ = _interfaz(qtbot, asistente=asistente, base=base)
+
+    interfaz.mostrar_al_arrancar()
+
+    assert asistente.isVisible() is True
+
+
+def test_si_ya_se_hizo_el_asistente_no_se_abre(qtbot: QtBot) -> None:
+    base = abrir_base(":memory:")
+    ajustes = AjustesRepo(base)
+    ajustes.establecer("asistente.hecho", True)
+    asistente = _asistente(qtbot, ajustes)
+    interfaz, _ = _interfaz(qtbot, asistente=asistente, base=base)
+
+    interfaz.mostrar_al_arrancar()
+
+    assert asistente.isVisible() is False
+
+
+def test_tras_saltearlo_no_vuelve_a_aparecer_en_el_proximo_arranque(qtbot: QtBot) -> None:
+    base = abrir_base(":memory:")
+    ajustes = AjustesRepo(base)
+    asistente = _asistente(qtbot, ajustes)
+    interfaz, _ = _interfaz(qtbot, asistente=asistente, base=base)
+    interfaz.mostrar_al_arrancar()
+    asistente.boton_saltear.click()
+
+    interfaz.mostrar_al_arrancar()
+
+    assert asistente.isVisible() is False
+
+
+def test_con_el_asistente_abierto_no_se_abre_ademas_la_ventana_de_ajustes(qtbot: QtBot) -> None:
+    base = abrir_base(":memory:")
+    asistente = _asistente(qtbot, AjustesRepo(base))
+    interfaz, _ = _interfaz(qtbot, asistente=asistente, base=base)
+
+    interfaz.mostrar_al_arrancar()
+
+    assert interfaz.ventana.isVisible() is False
+
+
+def test_sin_asistente_todo_sigue_como_antes(qtbot: QtBot) -> None:
+    interfaz, _ = _interfaz(qtbot)
+
+    interfaz.mostrar_al_arrancar()
+
+    assert interfaz.ventana.isVisible() is True
+
+
+def test_cerrar_la_interfaz_cierra_tambien_el_asistente(qtbot: QtBot) -> None:
+    base = abrir_base(":memory:")
+    asistente = _asistente(qtbot, AjustesRepo(base))
+    interfaz, _ = _interfaz(qtbot, asistente=asistente, base=base)
+    interfaz.mostrar_al_arrancar()
+
+    interfaz.cerrar()
+
+    assert asistente.isVisible() is False

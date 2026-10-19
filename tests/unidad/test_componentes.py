@@ -354,3 +354,33 @@ def test_la_ayuda_se_ve_siempre_debajo_del_titulo(qtbot: QtBot) -> None:
     textos = [e.text() for e in fila.findChildren(QLabel)]
 
     assert "Ayuda" in textos
+
+
+# ---- medidor de nivel (002, RP-008) ---------------------------------------------------------------------------
+
+
+def test_el_medidor_arranca_vacio_y_acota_el_valor(qtbot: QtBot) -> None:
+    from vozflow.ui.componentes import MedidorDeNivel
+
+    medidor = MedidorDeNivel()
+    qtbot.addWidget(medidor)
+
+    assert medidor.valor() == 0.0
+    medidor.establecer(0.4)
+    assert medidor.valor() == 0.4
+    medidor.establecer(9.0)
+    assert medidor.valor() == 1.0
+    medidor.establecer(-1.0)
+    assert medidor.valor() == 0.0
+
+
+def test_el_medidor_lleno_se_ve_distinto_del_vacio(qtbot: QtBot) -> None:
+    from vozflow.ui.componentes import MedidorDeNivel
+
+    medidor = MedidorDeNivel()
+    qtbot.addWidget(medidor)
+    vacio = _pixeles(medidor)
+
+    medidor.establecer(1.0)
+
+    assert _pixeles(medidor) != vacio

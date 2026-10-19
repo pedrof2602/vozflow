@@ -37,6 +37,14 @@ class Sondas:
     programa_instalado: Callable[[str], bool]
     consultar_ventana: Callable[[], tuple[bool, int]]
     """``(identificó una ventana, milisegundos que tardó)``."""
+    grupo_input_en_la_base: Callable[[], bool] = lambda: True
+    """El usuario figura en el grupo ``input`` (aunque la sesión actual todavía no lo tenga)."""
+    grupo_input_activo: Callable[[], bool] = lambda: True
+    """El proceso en marcha ya tiene el grupo ``input`` (hace falta una sesión nueva si no)."""
+    gestor_de_paquetes: Callable[[], str] = lambda: ""
+    """``dnf``, ``apt`` o vacío si no se conoce."""
+    microfonos: Callable[[], int] = lambda: 1
+    es_wayland: Callable[[], bool] = lambda: True
 
 
 def sondas_reales() -> Sondas:
@@ -56,7 +64,38 @@ def sondas_reales() -> Sondas:
         ventana = VentanaActivaAtspi().consultar()
         return ventana is not None, round((time.perf_counter() - inicio) * 1000)
 
+    def grupo_input_en_la_base() -> bool:
+        import getpass
+        import grp
+
+        try:
+            grupo = grp.getgrnam("input")
+        except KeyError:
+            return False
+        return getpass.getuser() in grupo.gr_mem or os.getgid() == grupo.gr_gid
+
+    def grupo_input_activo() -> bool:
+        import grp
+
+        try:
+            return grp.getgrnam("input").gr_gid in os.getgroups()
+        except KeyError:
+            return False
+
+    def gestor_de_paquetes() -> str:
+        return next((g for g in ("dnf", "apt") if shutil.which(g)), "")
+
+    def microfonos() -> int:
+        from vozflow.audio.captura import listar_dispositivos
+
+        return len(listar_dispositivos())
+
     return Sondas(
+        grupo_input_en_la_base=grupo_input_en_la_base,
+        grupo_input_activo=grupo_input_activo,
+        gestor_de_paquetes=gestor_de_paquetes,
+        microfonos=microfonos,
+        es_wayland=lambda: os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland",
         version_de_portal=version_de_portal,
         puede_leer_teclados=lambda: any(
             os.access(ruta, os.R_OK) for ruta in glob.glob("/dev/input/event*")

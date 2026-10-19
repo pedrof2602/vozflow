@@ -21,6 +21,7 @@ from vozflow.atajos.gsettings import ErrorDeGSettings
 from vozflow.atajos.puerto import AtajoOcupado, EscuchaDeAtajos
 from vozflow.audio.captura import ErrorDeAudio
 from vozflow.autoinicio import activar_autoinicio, autoinicio_activo, desactivar_autoinicio
+from vozflow.barra import BarraDeTexto
 from vozflow.configuracion import ConfiguracionDeBase
 from vozflow.diagnostico import (
     Comprobacion,
@@ -39,6 +40,7 @@ from vozflow.escritorio import argumentos_de_inicio
 from vozflow.gestion_de_proveedores import AlmacenDeClaves
 from vozflow.insercion.puerto import Insertor
 from vozflow.medicion import FRASES_DE_PRUEBA, ejecutar_medicion
+from vozflow.mensajes import explicar
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.base import abrir_base
 from vozflow.persistencia.claves import Claves, LlaveroNoDisponible
@@ -66,6 +68,8 @@ class Dependencias:
     crear_motor: Callable[[str], MotorDeTranscripcion]
     esperar: Callable[[float], None]
     descargar_modelo: Callable[[str], str]
+    descargar_modelo_con_avance: Callable[[str, Callable[[int, int], None]], str] | None = None
+    """Lo mismo, avisando el avance en bytes; con esto ``descargar-modelo`` dibuja una barra."""
     abrir_base: Callable[[], sqlite3.Connection] = abrir_base
     leer_clave: Callable[[str], str] = getpass.getpass
     claves: Callable[[], AlmacenDeClaves] = Claves
@@ -84,6 +88,7 @@ def dependencias_reales() -> Dependencias:
         crear_motor=lambda modelo: MotorFasterWhisper(modelo=modelo),
         esperar=time.sleep,
         descargar_modelo=descargar_modelo,
+        descargar_modelo_con_avance=descargar_modelo,
     )
 
 
@@ -278,7 +283,19 @@ def _orden_medir(argumentos: argparse.Namespace, dependencias: Dependencias) -> 
 
 def _orden_descargar_modelo(argumentos: argparse.Namespace, dependencias: Dependencias) -> int:
     _avisar(f"Descargando el modelo '{argumentos.modelo}' (puede tardar unos minutos)…")
-    print(dependencias.descargar_modelo(argumentos.modelo))
+    con_avance = dependencias.descargar_modelo_con_avance
+    if con_avance is None:
+        print(dependencias.descargar_modelo(argumentos.modelo))
+        return CODIGO_OK
+    barra = BarraDeTexto()
+    try:
+        carpeta = con_avance(argumentos.modelo, barra)
+    except ErrorDeTranscripcion as error:
+        barra.terminar()
+        explicacion = explicar(error.codigo)
+        raise cli.ErrorDeComando(f"{explicacion.que_paso} {explicacion.que_hacer}") from error
+    barra.terminar()
+    print(carpeta)
     return CODIGO_OK
 
 

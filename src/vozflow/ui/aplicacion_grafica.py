@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, QTimer
 from vozflow.dominio.dictado import EstadoDelDictado
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.ui.ajustes.ventana import ContextoDeAjustes, VentanaAjustes, crear_paginas
+from vozflow.ui.asistente.ventana import VentanaAsistente, debe_abrirse
 from vozflow.ui.bandeja import Bandeja
 from vozflow.ui.indicador import Indicador
 from vozflow.ui.puente import Puente
@@ -32,12 +33,15 @@ class InterfazGrafica(QObject):
         destino_de_traduccion: Callable[[], str | None] = lambda: None,
         bandeja_disponible: Callable[[], bool] | None = None,
         intervalo_de_nivel_ms: int = _INTERVALO_DE_NIVEL_MS,
+        asistente: VentanaAsistente | None = None,
     ) -> None:
         super().__init__()
         self.puente = Puente()
         self._controlador = controlador
         self._nivel = nivel
         self._destino_de_traduccion = destino_de_traduccion
+        self._ajustes = ajustes
+        self.asistente = asistente
         self.indicador = Indicador(activo=lambda: bool(ajustes.obtener("interfaz.indicador")))
         opciones = {} if bandeja_disponible is None else {"disponible": bandeja_disponible}
         self.bandeja = Bandeja(
@@ -64,7 +68,12 @@ class InterfazGrafica(QObject):
         self.ventana.mostrar_pagina(pagina)
 
     def mostrar_al_arrancar(self) -> None:
-        """Sin bandeja la ventana es la única señal de que el programa está corriendo."""
+        """La primera vez abre el asistente. Sin bandeja, la ventana de ajustes es la señal
+        de que el programa corre (con el asistente abierto ya hay una ventana a la vista).
+        """
+        if self.asistente is not None and debe_abrirse(self._ajustes):
+            self.asistente.abrir()
+            return
         if not self.bandeja.disponible:
             self.mostrar_ajustes("Dictado")
 
@@ -74,6 +83,8 @@ class InterfazGrafica(QObject):
         self.indicador.hide()
         self.ventana.permitir_cierre()
         self.ventana.close()
+        if self.asistente is not None:
+            self.asistente.hide()
 
     # ---- internos ------------------------------------------------------------------------------
 

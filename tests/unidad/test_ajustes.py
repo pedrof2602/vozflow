@@ -29,6 +29,7 @@ POR_DEFECTO = {
     "atajo.traducir": "RightAlt",
     "traduccion.idioma": "inglés",
     "interfaz.tema": "auto",
+    "asistente.hecho": False,
 }
 
 
@@ -81,6 +82,8 @@ def test_el_audio_por_defecto_es_el_predeterminado_del_sistema(ajustes: AjustesR
         ("interfaz.tema", "claro"),
         ("interfaz.tema", "oscuro"),
         ("interfaz.tema", "auto"),
+        ("asistente.hecho", True),
+        ("asistente.hecho", False),
     ],
 )
 def test_un_valor_valido_se_guarda_y_se_lee_con_su_tipo(
@@ -130,6 +133,9 @@ def test_restablecer_vuelve_al_defecto(ajustes: AjustesRepo) -> None:
         ("interfaz.tema", "dark"),
         ("interfaz.tema", ""),
         ("interfaz.tema", None),
+        ("asistente.hecho", "si"),
+        ("asistente.hecho", 1),
+        ("asistente.hecho", None),
         ("atajo.mantener", ""),
         ("atajo.mantener", "TeclaQueNoExiste"),
         ("atajo.alternar", "RightCtrl"),

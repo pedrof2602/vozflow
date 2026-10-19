@@ -211,3 +211,10 @@ def test_el_boton_de_enlace_se_estiliza_como_texto_con_el_acento(paleta: Paleta)
 
     linea = next(x for x in hoja.splitlines() if x.startswith('QPushButton[enlace="true"] {'))
     assert paleta.acento_texto in linea and "border: none" in linea
+
+
+def test_el_comando_para_copiar_se_ve_como_codigo() -> None:
+    hoja = hoja_de_estilos(OSCURA, "Inter")
+
+    linea = next(x for x in hoja.splitlines() if x.startswith("QLabel#comando"))
+    assert "monospace" in linea and OSCURA.campo in linea

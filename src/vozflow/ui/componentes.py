@@ -280,6 +280,39 @@ class FilaDeAjuste(QWidget):
         self.refrescar()
 
 
+class MedidorDeNivel(QWidget):
+    """Una barra que se llena con el volumen de la voz (0 a 1): así se ve que el micro anda."""
+
+    def __init__(self, padre: QWidget | None = None) -> None:
+        super().__init__(padre)
+        self._valor = 0.0
+        self.setMinimumSize(160, 12)
+        self.setMaximumHeight(12)
+
+    def valor(self) -> float:
+        return self._valor
+
+    def establecer(self, valor: float) -> None:
+        nuevo = min(1.0, max(0.0, valor))
+        if nuevo != self._valor:
+            self._valor = nuevo
+            self.update()
+
+    def paintEvent(self, evento: QPaintEvent) -> None:  # noqa: N802 (nombre de Qt)
+        paleta = paleta_actual()
+        pintor = QPainter(self)
+        pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pintor.setPen(Qt.PenStyle.NoPen)
+        pintor.setBrush(QColor(paleta.superficie_3))
+        radio = self.height() / 2
+        pintor.drawRoundedRect(QRectF(0, 0, self.width(), self.height()), radio, radio)
+        if self._valor > 0:
+            pintor.setBrush(QColor(paleta.primario))
+            ancho = max(self.height(), self.width() * self._valor)
+            pintor.drawRoundedRect(QRectF(0, 0, ancho, self.height()), radio, radio)
+        pintor.end()
+
+
 # ---- chips ------------------------------------------------------------------------------------
 
 

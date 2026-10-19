@@ -6,7 +6,9 @@ y decodificación voraz (``beam_size=1``).
 """
 
 import logging
+import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -37,15 +39,119 @@ def modelo_disponible(nombre: str = MODELO_POR_DEFECTO) -> bool:
     return _ruta_local(nombre) is not None
 
 
-def descargar_modelo(nombre: str = MODELO_POR_DEFECTO) -> str:
-    """Descarga el modelo una sola vez; es lo único que necesita internet. Devuelve su carpeta."""
-    from faster_whisper import download_model
+_ARCHIVOS_DEL_MODELO = [
+    "config.json",
+    "preprocessor_config.json",
+    "model.bin",
+    "tokenizer.json",
+    "vocabulary.*",
+]  # los mismos que baja ``faster_whisper.download_model``
 
+
+def _repositorio_del_modelo(nombre: str) -> str:
+    from faster_whisper.utils import _MODELS
+
+    if "/" in nombre:
+        return nombre
+    repositorio = _MODELS.get(nombre)
+    if repositorio is None:
+        raise ErrorDeTranscripcion(f"El modelo '{nombre}' no existe", "generico")
+    return str(repositorio)
+
+
+def _tamano_total_del_modelo(repositorio: str) -> int:
+    """Cuántos bytes bajará el modelo, para mostrar un porcentaje. 0 si no se puede saber."""
+    import fnmatch
+
+    from huggingface_hub import HfApi
+
+    info = HfApi().model_info(repositorio, files_metadata=True)
+    return sum(
+        int(archivo.size or 0)
+        for archivo in info.siblings or []
+        if any(fnmatch.fnmatch(archivo.rfilename, patron) for patron in _ARCHIVOS_DEL_MODELO)
+    )
+
+
+class _Avance:
+    """Suma los bytes de todas las barras de archivos y avisa; las demás barras no cuentan."""
+
+    def __init__(self, al_avance: Callable[[int, int], None] | None, total_conocido: int) -> None:
+        self._al_avance = al_avance
+        self._total_conocido = total_conocido
+        self._visto = 0
+        self.hechos = 0
+        self._candado = threading.Lock()  # los archivos se bajan en paralelo
+
+    def pedido(self, total: int) -> None:
+        with self._candado:
+            self._visto += total
+
+    def avanzo(self, bytes_: int) -> None:
+        with self._candado:
+            self.hechos += bytes_
+            hechos, total = self.hechos, max(self._total_conocido, self._visto)
+        if self._al_avance is not None:
+            self._al_avance(min(hechos, total), total)
+
+
+def _barra_de_progreso(avance: _Avance) -> type:
+    from faster_whisper.utils import disabled_tqdm
+
+    class Barra(disabled_tqdm):  # type: ignore[misc]
+        """Una barra que no dibuja nada: solo cuenta los bytes y se los pasa a ``avance``."""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self._en_bytes = kwargs.get("unit") == "B"
+            if self._en_bytes:
+                avance.pedido(int(kwargs.get("total") or 0))
+
+        def update(self, n: float | None = 1) -> bool | None:
+            if self._en_bytes and n:
+                avance.avanzo(int(n))
+            return super().update(n)  # type: ignore[no-any-return]
+
+    return Barra
+
+
+def descargar_modelo(
+    nombre: str = MODELO_POR_DEFECTO,
+    al_avance: Callable[[int, int], None] | None = None,
+    *,
+    snapshot: Callable[..., str] | None = None,
+    tamano_total: Callable[[str], int] | None = None,
+) -> str:
+    """Descarga el modelo una sola vez; es lo único que necesita internet. Devuelve su carpeta.
+
+    ``al_avance(hechos, total)`` se llama con los bytes bajados. Repetir la llamada tras un corte
+    retoma lo ya bajado, y no deja archivos a medias a la vista.
+    """
     try:
-        return str(download_model(nombre))
+        repositorio = _repositorio_del_modelo(nombre)
+        try:
+            total_conocido = (tamano_total or _tamano_total_del_modelo)(repositorio)
+        except Exception:  # sin red o sin dato: se muestra con lo que se vaya viendo
+            total_conocido = 0
+        if snapshot is None:
+            from huggingface_hub import snapshot_download
+
+            snapshot = snapshot_download
+        avance = _Avance(al_avance, total_conocido)
+        return str(
+            snapshot(
+                repositorio,
+                allow_patterns=_ARCHIVOS_DEL_MODELO,
+                tqdm_class=_barra_de_progreso(avance),
+            )
+        )
+    except ErrorDeTranscripcion:
+        raise
     except Exception as error:
+        _registro.warning("No se pudo descargar el modelo %s: %s", nombre, error)
         raise ErrorDeTranscripcion(
-            f"No se pudo descargar el modelo '{nombre}': {error}", "modelo_faltante"
+            f"No se pudo descargar el modelo '{nombre}' ({type(error).__name__})",
+            "modelo_faltante",
         ) from error
 
 
@@ -80,8 +186,13 @@ class MotorFasterWhisper:
         self._hilos = hilos
         self._permitidos = idiomas_permitidos
         self._modelo: Any = None
+        self._candado = threading.Lock()  # el arranque y el asistente pueden cargar a la vez
 
     def cargar(self) -> None:
+        with self._candado:
+            self._cargar_sin_candado()
+
+    def _cargar_sin_candado(self) -> None:
         if self._modelo is not None:
             return
         ruta = _ruta_local(self._nombre)

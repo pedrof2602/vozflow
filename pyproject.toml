@@ -57,5 +57,5 @@ markers = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["sounddevice", "evdev", "faster_whisper", "jeepney", "jeepney.*", "keyring", "keyring.*", "gi", "gi.*"]
+module = ["sounddevice", "evdev", "faster_whisper", "faster_whisper.*", "jeepney", "jeepney.*", "keyring", "keyring.*", "gi", "gi.*"]
 ignore_missing_imports = true

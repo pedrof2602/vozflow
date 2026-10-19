@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QApplication
 
 from vozflow.__main__ import Dependencias, DependenciasDelServicio
 from vozflow.aplicacion import Aplicacion
+from vozflow.atajos.disponibilidad import teclas_del_teclado
 from vozflow.atajos.puerto import AccionDeAtajo
 from vozflow.audio.captura import listar_dispositivos
 from vozflow.autoinicio import (
@@ -27,14 +28,20 @@ from vozflow.autoinicio import (
     fijar_plataforma,
 )
 from vozflow.configuracion import ConfiguracionDeBase
+from vozflow.diagnostico import sondas_reales
 from vozflow.escritorio import argumentos_de_inicio
 from vozflow.insercion.portapapeles import PortapapelesWayland
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.historial import HistorialRepo
 from vozflow.reescritura import ReescrituraDeBase
+from vozflow.transcripcion.faster_whisper import modelo_disponible
+from vozflow.transcripcion.motor import MotorDeTranscripcion
 from vozflow.ui.ajustes.ventana import ContextoDeAjustes
 from vozflow.ui.aplicacion_grafica import InterfazGrafica
 from vozflow.ui.arranque import InstanciaUnica
+from vozflow.ui.asistente.fabrica import ContextoDelAsistente, crear_pasos
+from vozflow.ui.asistente.real import MedidorReal, ProbadorReal
+from vozflow.ui.asistente.ventana import VentanaAsistente
 from vozflow.ui.aspecto import Aspecto
 
 _registro = logging.getLogger(__name__)
@@ -42,6 +49,48 @@ _registro = logging.getLogger(__name__)
 
 def _directorio_del_candado() -> Path:
     return Path(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir())
+
+
+def _crear_asistente(
+    repo: AjustesRepo,
+    aplicacion: Aplicacion,
+    motor: MotorDeTranscripcion,
+    nombre_del_modelo: str,
+    dependencias: Dependencias,
+    app: QApplication,
+) -> VentanaAsistente:
+    """El asistente de primer uso; los pasos se arman de nuevo cada vez que se abre."""
+
+    def descargar(al_avance: Callable[[int, int], None]) -> str:
+        con_avance = dependencias.descargar_modelo_con_avance
+        if con_avance is None:
+            return dependencias.descargar_modelo(nombre_del_modelo)
+        return con_avance(nombre_del_modelo, al_avance)
+
+    def idioma() -> str | None:
+        modo = repo.obtener("idioma.modo")
+        return None if modo == "automatico" else str(modo)
+
+    contexto = ContextoDelAsistente(
+        ajustes=repo,
+        aplicar_atajos=_aplicar_atajos(aplicacion),
+        listar_dispositivos=listar_dispositivos,
+        sondas=sondas_reales(),
+        copiar=app.clipboard().setText,
+        teclas_del_teclado=teclas_del_teclado,
+        medidor=MedidorReal(dependencias.crear_grabadora),
+        probador=ProbadorReal(
+            motor=motor,
+            crear_grabadora=dependencias.crear_grabadora,
+            dispositivo=lambda: str(repo.obtener("audio.dispositivo")) or None,
+            idioma=idioma,
+            modelo_disponible=lambda: modelo_disponible(nombre_del_modelo),
+            descargar=descargar,
+        ),
+        autoinicio_activo=lambda: autoinicio_activo(_directorio_de_config()),
+        fijar_autoinicio=_fijar_autoinicio,
+    )
+    return VentanaAsistente(lambda: crear_pasos(contexto), repo)
 
 
 def _directorio_de_config() -> Path:
@@ -107,10 +156,12 @@ def arrancar_interfaz(
             if interfaz is not None:
                 interfaz.puente.aviso.emit(texto)
 
+        nombre_del_modelo = argumentos.modelo or ajustes.modelo
+        motor = servicio.crear_motor(nombre_del_modelo, ajustes.hilos)
         aplicacion = Aplicacion(
             escucha=servicio.crear_escucha(),
             grabadora=grabadora,
-            motor=servicio.crear_motor(argumentos.modelo or ajustes.modelo, ajustes.hilos),
+            motor=motor,
             ventana=servicio.crear_ventana(),
             insertor=insertor,
             atajos=ajustes.atajos(),
@@ -128,6 +179,7 @@ def arrancar_interfaz(
                 "El texto no se pudo insertar: quedó en el historial para recuperarlo."
             ),
         )
+        asistente = _crear_asistente(repo, aplicacion, motor, nombre_del_modelo, dependencias, app)
         contexto = ContextoDeAjustes(
             base=base,
             claves=dependencias.claves(),
@@ -139,6 +191,7 @@ def arrancar_interfaz(
             aplicar_tema=aspecto.establecer_modo,
             autoinicio_activo=lambda: autoinicio_activo(_directorio_de_config()),
             fijar_autoinicio=_fijar_autoinicio,
+            repetir_asistente=asistente.abrir,
         )
         interfaz = InterfazGrafica(
             controlador=_Controlador(aplicacion, app),
@@ -146,6 +199,7 @@ def arrancar_interfaz(
             contexto=contexto,
             nivel=lambda: float(getattr(grabadora, "nivel", 0.0)),
             destino_de_traduccion=lambda: aplicacion.idioma_en_curso,
+            asistente=asistente,
         )
         aspecto.al_cambiar(lambda _: interfaz.ventana.actualizar_iconos())
         instancia.pedido_de_mostrar.connect(lambda: interfaz.mostrar_ajustes("Dictado"))
