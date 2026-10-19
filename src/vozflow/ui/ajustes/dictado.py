@@ -18,7 +18,7 @@ from vozflow.ui.ajustes.teclas import (
     CampoDeAtajo,
     cambiar_tecla_para_dictar,
 )
-from vozflow.ui.componentes import FilaDeAjuste, FilaDeTeclas, Interruptor
+from vozflow.ui.componentes import FilaDeAjuste, FilaDeTeclas, Interruptor, acotar_combo
 from vozflow.ui.microfonos import llenar_combo_de_microfonos
 from vozflow.ui.textos import ayuda_de, texto_de
 
@@ -41,7 +41,9 @@ class PaginaDictado(PaginaBase):
         self._aplicar_atajos = aplicar_atajos
         self._listar = listar
         self.combo_microfono = QComboBox()
+        acotar_combo(self.combo_microfono)
         self.combo_idioma = QComboBox()
+        acotar_combo(self.combo_idioma)
         for texto, valor in _IDIOMAS:
             self.combo_idioma.addItem(texto, valor)
         self.interruptor_indicador = Interruptor()

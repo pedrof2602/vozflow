@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from vozflow.dominio.reescritura import TIEMPO_MAXIMO_S, TIEMPO_MINIMO_S
 from vozflow.gestion_de_proveedores import ErrorDeProveedor, GestionDeProveedores
 from vozflow.ui.ajustes.base import PaginaBase
+from vozflow.ui.componentes import acotar_combo
 from vozflow.ui.textos import ayuda_de, texto_de
 
 EnSegundoPlano = Callable[[Callable[[], str], Callable[[str, bool], None]], None]
@@ -64,6 +65,7 @@ class PaginaProveedores(PaginaBase):
         self.aviso_de_privacidad.setWordWrap(True)
         self.estado_general = QLabel()
         self.combo_proveedor = QComboBox()
+        acotar_combo(self.combo_proveedor)
         for id_, nombre in _NOMBRES.items():
             self.combo_proveedor.addItem(nombre, id_)
         self.campo_modelo = QLineEdit()
@@ -74,6 +76,7 @@ class PaginaProveedores(PaginaBase):
         self.campo_clave = QLineEdit()
         self.campo_clave.setEchoMode(QLineEdit.EchoMode.Password)
         self.combo_idioma = QComboBox()
+        acotar_combo(self.combo_idioma)
         self.combo_idioma.setEditable(True)
         self.combo_idioma.addItems(_IDIOMAS_SUGERIDOS)
         self.aclaracion_de_traduccion = QLabel(

@@ -11,7 +11,7 @@ from vozflow.audio.captura import Dispositivo, ErrorDeAudio
 from vozflow.mensajes import explicar
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.ui.asistente.base import PasoDelAsistente
-from vozflow.ui.componentes import MedidorDeNivel
+from vozflow.ui.componentes import MedidorDeNivel, acotar_combo
 from vozflow.ui.microfonos import llenar_combo_de_microfonos
 
 _registro = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ class PasoMicrofono(PasoDelAsistente):
         self._hay_microfonos = False
         self._error: ErrorDeAudio | None = None
         self.combo = QComboBox()
+        acotar_combo(self.combo)
         self.combo.currentIndexChanged.connect(lambda _: self._elegido())
         self.boton_buscar = QPushButton("Buscar de nuevo")
         self.boton_buscar.clicked.connect(lambda _=False: self._buscar_de_nuevo())

@@ -18,7 +18,7 @@ from vozflow.persistencia.asignaciones_repo import AsignacionesRepo
 from vozflow.persistencia.errores import DatoInvalido
 from vozflow.persistencia.modos_repo import ModosRepo
 from vozflow.ui.ajustes.base import PaginaBase
-from vozflow.ui.componentes import Interruptor
+from vozflow.ui.componentes import Interruptor, acotar_combo
 from vozflow.ui.textos import ayuda_de, texto_de
 
 _PEGADOS = (("Automático", "automatico"), ("Como terminal", "terminal"), ("Normal", "normal"))
@@ -43,9 +43,11 @@ class PaginaModos(PaginaBase):
             "Indicación de estilo para la reescritura (opcional)"
         )
         self.combo_pegado = QComboBox()
+        acotar_combo(self.combo_pegado)
         for texto, valor in _PEGADOS:
             self.combo_pegado.addItem(texto, valor)
         self.combo_salto = QComboBox()
+        acotar_combo(self.combo_salto)
         for texto, valor in _SALTOS:
             self.combo_salto.addItem(texto, valor)
         for control, clave in (
@@ -85,6 +87,7 @@ class PaginaModos(PaginaBase):
         self.campo_aplicacion = QLineEdit()
         self.campo_aplicacion.setPlaceholderText("Identificador de la aplicación, p. ej. ptyxis")
         self.combo_modo_de_aplicacion = QComboBox()
+        acotar_combo(self.combo_modo_de_aplicacion)
         self.check_terminal = Interruptor(texto_de("modo.terminal").titulo)
         self.check_terminal.setToolTip(ayuda_de("modo.terminal"))
         asignar = QPushButton("Asignar")

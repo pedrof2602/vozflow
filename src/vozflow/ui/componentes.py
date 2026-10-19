@@ -13,6 +13,7 @@ from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -278,6 +279,13 @@ class FilaDeAjuste(QWidget):
         if self._restablecer is not None:
             self._restablecer()
         self.refrescar()
+
+
+def acotar_combo(combo: QComboBox, caracteres: int = 24) -> None:
+    """Que el combo no pida el ancho de su opción más larga (un nombre de micrófono puede tener
+    80 letras y empujaría la página fuera de la ventana)."""
+    combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+    combo.setMinimumContentsLength(caracteres)
 
 
 class MedidorDeNivel(QWidget):
