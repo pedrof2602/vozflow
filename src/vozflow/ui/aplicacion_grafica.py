@@ -41,7 +41,7 @@ class InterfazGrafica(QObject):
         self.indicador = Indicador(activo=lambda: bool(ajustes.obtener("interfaz.indicador")))
         opciones = {} if bandeja_disponible is None else {"disponible": bandeja_disponible}
         self.bandeja = Bandeja(
-            al_abrir_ajustes=lambda: self.mostrar_ajustes("Teclas"),
+            al_abrir_ajustes=lambda: self.mostrar_ajustes("Dictado"),
             al_abrir_historial=lambda: self.mostrar_ajustes("Historial"),
             al_pausar=controlador.pausar,
             al_salir=self.salir,
@@ -60,13 +60,13 @@ class InterfazGrafica(QObject):
         self.puente.aviso.connect(self._al_avisar)
         self.puente.abrir_pagina.connect(self.mostrar_ajustes)
 
-    def mostrar_ajustes(self, pagina: str = "Teclas") -> None:
+    def mostrar_ajustes(self, pagina: str = "Dictado") -> None:
         self.ventana.mostrar_pagina(pagina)
 
     def mostrar_al_arrancar(self) -> None:
         """Sin bandeja la ventana es la única señal de que el programa está corriendo."""
         if not self.bandeja.disponible:
-            self.mostrar_ajustes("Teclas")
+            self.mostrar_ajustes("Dictado")
 
     def cerrar(self) -> None:
         self._timer.stop()

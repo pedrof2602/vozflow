@@ -326,7 +326,7 @@ def test_abrir_ajustes_y_historial_desde_la_bandeja(qtbot: QtBot) -> None:
     interfaz.bandeja.menu.actions()[1].trigger()  # Historial
     assert interfaz.ventana.pagina_actual() == "Historial" and interfaz.ventana.isVisible()
     interfaz.bandeja.menu.actions()[0].trigger()  # Abrir ajustes
-    assert interfaz.ventana.pagina_actual() == "Teclas"
+    assert interfaz.ventana.pagina_actual() == "Dictado"
 
 
 def test_un_aviso_se_ve_en_la_ventana_si_no_hay_bandeja(qtbot: QtBot) -> None:

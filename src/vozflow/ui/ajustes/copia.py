@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QPushButton, QVB
 from vozflow.dominio.copia import CopiaInvalida
 from vozflow.persistencia.copia_repo import CopiaRepo
 from vozflow.ui.ajustes.base import PaginaBase
+from vozflow.ui.textos import ayuda_de
 
 
 def elegir_con_dialogo(modo: str) -> Path | None:
@@ -36,13 +37,15 @@ class PaginaCopia(PaginaBase):
             "aplicación. No incluye el historial ni las claves de acceso."
         )
         self.aclaracion.setWordWrap(True)
-        exportar = QPushButton("Exportar…")
-        exportar.clicked.connect(lambda _=False: self.exportar())
-        importar = QPushButton("Importar…")
-        importar.clicked.connect(lambda _=False: self.importar())
+        self.boton_exportar = QPushButton("Guardar una copia…")
+        self.boton_exportar.setToolTip(ayuda_de("copia.exportar"))
+        self.boton_exportar.clicked.connect(lambda _=False: self.exportar())
+        self.boton_importar = QPushButton("Recuperar una copia…")
+        self.boton_importar.setToolTip(ayuda_de("copia.importar"))
+        self.boton_importar.clicked.connect(lambda _=False: self.importar())
         botones = QHBoxLayout()
-        botones.addWidget(exportar)
-        botones.addWidget(importar)
+        botones.addWidget(self.boton_exportar)
+        botones.addWidget(self.boton_importar)
         columna = QVBoxLayout(self)
         columna.addWidget(self.aclaracion)
         columna.addLayout(botones)

@@ -9,7 +9,7 @@ from vozflow.ui.iconos_de_linea import NOMBRES, svg_de
 
 USADOS_POR_LA_INTERFAZ = [
     "historial", "vocabulario", "modos", "teclas", "audio", "reescritura", "copia", "ajustes",
-    "buscar", "copiar", "insertar", "borrar", "mas", "cerrar", "pausa", "traducir",
+    "buscar", "copiar", "insertar", "borrar", "mas", "cerrar", "pausa", "traducir", "derecha", "abajo",
 ]  # fmt: skip
 
 

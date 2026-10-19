@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from vozflow.dominio.reescritura import TIEMPO_MAXIMO_S, TIEMPO_MINIMO_S
 from vozflow.gestion_de_proveedores import ErrorDeProveedor, GestionDeProveedores
 from vozflow.ui.ajustes.base import PaginaBase
+from vozflow.ui.textos import ayuda_de, texto_de
 
 EnSegundoPlano = Callable[[Callable[[], str], Callable[[str, bool], None]], None]
 _NOMBRES = {"ollama": "Ollama (local)", "anthropic": "Anthropic", "openrouter": "OpenRouter"}
@@ -48,12 +49,19 @@ def en_un_hilo(trabajo: Callable[[], str], al_terminar: Callable[[str, bool], No
 
 
 class PaginaProveedores(PaginaBase):
+    CLAVES = ("reescritura.activa", "traduccion.idioma")
+
     def __init__(
         self, gestion: GestionDeProveedores, en_segundo_plano: EnSegundoPlano = en_un_hilo
     ) -> None:
         super().__init__()
         self._gestion = gestion
         self._en_segundo_plano = en_segundo_plano
+        self.aviso_de_privacidad = QLabel(
+            "El asistente de IA es opcional y viene apagado. Si lo prendés, solo el texto que "
+            "dictás viaja al servicio que elijas; tu audio nunca sale de tu computadora."
+        )
+        self.aviso_de_privacidad.setWordWrap(True)
         self.estado_general = QLabel()
         self.combo_proveedor = QComboBox()
         for id_, nombre in _NOMBRES.items():
@@ -74,13 +82,22 @@ class PaginaProveedores(PaginaBase):
         )
         self.aclaracion_de_traduccion.setWordWrap(True)
         formulario = QFormLayout(self)
+        for control, clave in (
+            (self.campo_modelo, "proveedor.modelo"),
+            (self.spin_tiempo, "proveedor.tiempo"),
+            (self.campo_direccion, "proveedor.direccion"),
+            (self.campo_clave, "proveedor.clave"),
+            (self.combo_idioma, "traduccion.idioma"),
+        ):
+            control.setToolTip(ayuda_de(clave))
+        formulario.addRow(self.aviso_de_privacidad)
         formulario.addRow(self.estado_general)
         formulario.addRow("Proveedor", self.combo_proveedor)
-        formulario.addRow("Modelo", self.campo_modelo)
-        formulario.addRow("Tiempo máximo", self.spin_tiempo)
-        formulario.addRow("Dirección (solo Ollama)", self.campo_direccion)
-        formulario.addRow("Clave de acceso", self.campo_clave)
-        formulario.addRow("Traducir al idioma", self.combo_idioma)
+        formulario.addRow(texto_de("proveedor.modelo").titulo, self.campo_modelo)
+        formulario.addRow(texto_de("proveedor.tiempo").titulo, self.spin_tiempo)
+        formulario.addRow(texto_de("proveedor.direccion").titulo, self.campo_direccion)
+        formulario.addRow(texto_de("proveedor.clave").titulo, self.campo_clave)
+        formulario.addRow(texto_de("traduccion.idioma").titulo, self.combo_idioma)
         formulario.addRow(self.aclaracion_de_traduccion)
         botones = QHBoxLayout()
         for texto, accion in (

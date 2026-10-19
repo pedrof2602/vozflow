@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+import pytest
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QLabel, QWidget
 from pytestqt.qtbot import QtBot
@@ -130,7 +131,8 @@ def test_se_arman_todas_las_paginas_de_los_ajustes(qtbot: QtBot, tmp_path: Path)
     paginas = crear_paginas(_contexto(tmp_path), lambda accion: accion())
 
     assert list(paginas) == [
-        "Teclas", "Audio", "Modos", "Vocabulario", "Reescritura", "Copia", "Historial", "Apariencia", "Sistema"
+        "Dictado", "Vocabulario", "Historial", "General",
+        "Otras teclas", "Modos", "Modelo y rendimiento", "Asistente de IA", "Copia de seguridad",
     ]  # fmt: skip
     for pagina in paginas.values():
         qtbot.addWidget(pagina)
@@ -154,7 +156,7 @@ def test_las_paginas_se_conectan_entre_si_por_la_misma_base(qtbot: QtBot, tmp_pa
     vocabulario.campo_palabra.setText("SQLAlchemy")  # type: ignore[attr-defined]
     vocabulario.agregar_palabra()  # type: ignore[attr-defined]
 
-    copia = paginas["Copia"]
+    copia = paginas["Copia de seguridad"]
     destino = tmp_path / "c.json"
     copia._elegir = lambda modo: destino  # type: ignore[attr-defined]  # noqa: SLF001
     copia.exportar()  # type: ignore[attr-defined]
@@ -280,11 +282,10 @@ def test_las_paginas_reales_quedan_agrupadas_como_en_la_guia(qtbot: QtBot, tmp_p
     qtbot.addWidget(ventana)
 
     assert ventana.nombres_de_paginas() == [
-        "Historial", "Modos", "Vocabulario", "Teclas", "Audio", "Reescritura", "Copia", "Apariencia", "Sistema",
+        "Dictado", "Vocabulario", "Historial", "General",
+        "Otras teclas", "Modos", "Modelo y rendimiento", "Asistente de IA", "Copia de seguridad",
     ]  # fmt: skip
-    assert ventana.etiquetas_de_grupo() == [
-        "INICIO", "TEXTO", "DICTADO", "INTELIGENCIA ARTIFICIAL", "DATOS", "APLICACIÓN",
-    ]  # fmt: skip
+    assert ventana.etiquetas_de_grupo() == ["Avanzado"]
     assert all(not b.icon().isNull() for b in ventana.botones_de_navegacion())
 
 
@@ -303,3 +304,105 @@ def test_al_cambiar_el_tema_los_iconos_de_la_barra_se_vuelven_a_teñir(qtbot: Qt
     despues = ventana.botones_de_navegacion()[0].icon().pixmap(18, 18).toImage()
     assert antes != despues
     establecer_paleta(OSCURA)
+
+
+# ---- «Avanzado» plegado (002, RP-015, RP-016, CP-003) ---------------------------------------------------------
+
+AVANZADAS = [
+    "Otras teclas",
+    "Modos",
+    "Modelo y rendimiento",
+    "Asistente de IA",
+    "Copia de seguridad",
+]
+
+
+def _real(qtbot: QtBot, tmp_path: Path) -> VentanaAjustes:
+    ventana = VentanaAjustes(crear_paginas(_contexto(tmp_path), lambda accion: accion()))
+    qtbot.addWidget(ventana)
+    ventana.show()
+    return ventana
+
+
+def _boton(ventana: VentanaAjustes, nombre: str):  # type: ignore[no-untyped-def]
+    return next(b for b in ventana.botones_de_navegacion() if b.text().strip() == nombre)
+
+
+def test_arranca_en_dictado(qtbot: QtBot, tmp_path: Path) -> None:
+    assert _real(qtbot, tmp_path).pagina_actual() == "Dictado"
+
+
+def test_la_pantalla_principal_muestra_solo_lo_basico(qtbot: QtBot, tmp_path: Path) -> None:
+    ventana = _real(qtbot, tmp_path)
+
+    visibles = [b.text().strip() for b in ventana.botones_de_navegacion() if b.isVisible()]
+
+    assert visibles == ["Dictado", "Vocabulario", "Historial", "General"]
+
+
+def test_avanzado_arranca_cerrado(qtbot: QtBot, tmp_path: Path) -> None:
+    ventana = _real(qtbot, tmp_path)
+
+    assert ventana.grupo_abierto("Avanzado") is False
+    assert all(_boton(ventana, n).isVisible() is False for n in AVANZADAS)
+
+
+def test_un_clic_en_avanzado_muestra_sus_paginas_y_otro_las_oculta(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    ventana = _real(qtbot, tmp_path)
+
+    ventana.encabezado_de_grupo("Avanzado").click()
+    assert ventana.grupo_abierto("Avanzado") is True
+    assert all(_boton(ventana, n).isVisible() for n in AVANZADAS)
+
+    ventana.encabezado_de_grupo("Avanzado").click()
+    assert ventana.grupo_abierto("Avanzado") is False
+
+
+@pytest.mark.parametrize("nombre", AVANZADAS)
+def test_cualquier_pagina_avanzada_cuesta_dos_clics(
+    qtbot: QtBot, tmp_path: Path, nombre: str
+) -> None:
+    ventana = _real(qtbot, tmp_path)
+
+    ventana.encabezado_de_grupo("Avanzado").click()  # clic 1
+    _boton(ventana, nombre).click()  # clic 2
+
+    assert ventana.pagina_actual() == nombre
+    assert ventana.widget_de_pagina(nombre).isVisible()
+
+
+def test_mostrar_una_pagina_avanzada_por_codigo_abre_el_grupo(qtbot: QtBot, tmp_path: Path) -> None:
+    ventana = _real(qtbot, tmp_path)
+
+    ventana.mostrar_pagina("Modos")
+
+    assert ventana.grupo_abierto("Avanzado") is True and _boton(ventana, "Modos").isVisible()
+
+
+def test_las_paginas_basicas_no_dependen_del_grupo(qtbot: QtBot, tmp_path: Path) -> None:
+    ventana = _real(qtbot, tmp_path)
+
+    for nombre in ("Dictado", "Vocabulario", "Historial", "General"):
+        _boton(ventana, nombre).click()
+        assert ventana.pagina_actual() == nombre
+
+
+def test_un_grupo_que_no_es_plegable_sigue_siendo_una_etiqueta(qtbot: QtBot) -> None:
+    ventana = _con_grupos(qtbot)
+
+    assert ventana.etiquetas_de_grupo() == ["Primero", "Segundo", "Tercero"]
+    assert ventana.grupo_abierto("Primero") is True
+
+
+def test_se_puede_plegar_cualquier_grupo_al_crear(qtbot: QtBot) -> None:
+    paginas: dict[str, QWidget] = {"Uno": QLabel("u"), "Dos": QLabel("d")}
+    ventana = VentanaAjustes(
+        paginas, grupos={"Dos": "Extra"}, orden_de_grupos=["Extra"], plegados=["Extra"], espera_ms=0
+    )
+    qtbot.addWidget(ventana)
+    ventana.show()
+
+    assert ventana.grupo_abierto("Extra") is False
+    assert _boton(ventana, "Dos").isVisible() is False and _boton(ventana, "Uno").isVisible()

@@ -47,6 +47,8 @@ _FORMAS = {
     ),
     "mas": '<path d="M12 5v14M5 12h14"/>',
     "cerrar": '<path d="M6 6l12 12M18 6L6 18"/>',
+    "derecha": '<path d="M9 6l6 6-6 6"/>',
+    "abajo": '<path d="M6 9l6 6 6-6"/>',
     "pausa": '<path d="M8 5v14M16 5v14"/>',
     "traducir": (
         '<path d="M4 5h9M8.5 3v2M6 5c.5 4 2.5 6.5 6 8M12 5c-.5 3-2.5 6-7 8.5'

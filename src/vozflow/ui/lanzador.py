@@ -148,7 +148,7 @@ def arrancar_interfaz(
             destino_de_traduccion=lambda: aplicacion.idioma_en_curso,
         )
         aspecto.al_cambiar(lambda _: interfaz.ventana.actualizar_iconos())
-        instancia.pedido_de_mostrar.connect(lambda: interfaz.mostrar_ajustes("Teclas"))
+        instancia.pedido_de_mostrar.connect(lambda: interfaz.mostrar_ajustes("Dictado"))
         reloj_de_senales = _atender_ctrl_c(interfaz.salir)  # que no se libere mientras corre Qt
         interfaz.mostrar_al_arrancar()
         threading.Thread(
@@ -180,7 +180,7 @@ def _iniciar_en_segundo_plano(aplicacion: Aplicacion, interfaz: InterfazGrafica)
     except Exception as error:
         _registro.warning("No se pudo iniciar la escucha de atajos: %s", type(error).__name__)
         interfaz.puente.aviso.emit(f"No se pudieron activar los atajos: {error}")
-        interfaz.puente.abrir_pagina.emit("Teclas")  # para que la persona pueda cambiarlos
+        interfaz.puente.abrir_pagina.emit("Dictado")  # para que la persona pueda cambiarlos
         return
     interfaz.puente.aviso.emit("vozflow está listo.")
 

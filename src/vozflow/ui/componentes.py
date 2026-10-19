@@ -5,6 +5,7 @@ siguen al tema aunque cambie con la ventana abierta.
 """
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
@@ -220,12 +221,27 @@ class Tarjeta(QFrame):
 
 
 class FilaDeAjuste(QWidget):
-    """Título y descripción a la izquierda, el control a la derecha."""
+    """Título y ayuda a la izquierda, el control a la derecha y, si la opción cambió, «Restablecer».
+
+    ``es_el_original`` dice si el valor es el de fábrica; con ``restablecer`` el botón aparece solo
+    cuando no lo es (hay que llamar a ``refrescar`` después de cada cambio).
+    """
 
     def __init__(
-        self, titulo: str, descripcion: str, control: QWidget, padre: QWidget | None = None
+        self,
+        titulo: str,
+        descripcion: str,
+        control: QWidget,
+        padre: QWidget | None = None,
+        *,
+        restablecer: Callable[[], None] | None = None,
+        es_el_original: Callable[[], bool] | None = None,
     ) -> None:
         super().__init__(padre)
+        self.titulo = titulo
+        self.ayuda = descripcion
+        self._restablecer = restablecer
+        self._es_el_original = es_el_original
         fila = QHBoxLayout(self)
         fila.setContentsMargins(0, 4, 0, 4)
         fila.setSpacing(16)
@@ -242,6 +258,26 @@ class FilaDeAjuste(QWidget):
         control.setParent(self)
         fila.addWidget(control, 0, Qt.AlignmentFlag.AlignVCenter)
         self.control = control
+        self.boton_restablecer: QPushButton | None = None
+        if restablecer is not None:
+            self.boton_restablecer = QPushButton("Restablecer")
+            self.boton_restablecer.setProperty("enlace", True)
+            self.boton_restablecer.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.boton_restablecer.clicked.connect(lambda _=False: self._al_restablecer())
+            fila.addWidget(self.boton_restablecer, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.refrescar()
+
+    def refrescar(self) -> None:
+        """Muestra u oculta «Restablecer» según el valor actual."""
+        if self.boton_restablecer is None:
+            return
+        original = self._es_el_original() if self._es_el_original is not None else True
+        self.boton_restablecer.setVisible(not original)
+
+    def _al_restablecer(self) -> None:
+        if self._restablecer is not None:
+            self._restablecer()
+        self.refrescar()
 
 
 # ---- chips ------------------------------------------------------------------------------------

@@ -203,3 +203,11 @@ def test_la_seleccion_lleva_el_tinte_del_acento_y_el_texto_se_lee(paleta: Paleta
     rojo, verde, azul = (int(paleta.seleccion[i : i + 2], 16) for i in (1, 3, 5))
     assert rojo >= azul and rojo > verde
     assert contraste(paleta.acento_texto, paleta.seleccion) >= 4.5
+
+
+@pytest.mark.parametrize("paleta", PALETAS)
+def test_el_boton_de_enlace_se_estiliza_como_texto_con_el_acento(paleta: Paleta) -> None:
+    hoja = hoja_de_estilos(paleta, "Inter")
+
+    linea = next(x for x in hoja.splitlines() if x.startswith('QPushButton[enlace="true"] {'))
+    assert paleta.acento_texto in linea and "border: none" in linea

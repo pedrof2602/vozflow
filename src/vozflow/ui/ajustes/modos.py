@@ -19,6 +19,7 @@ from vozflow.persistencia.errores import DatoInvalido
 from vozflow.persistencia.modos_repo import ModosRepo
 from vozflow.ui.ajustes.base import PaginaBase
 from vozflow.ui.componentes import Interruptor
+from vozflow.ui.textos import ayuda_de, texto_de
 
 _PEGADOS = (("Automático", "automatico"), ("Como terminal", "terminal"), ("Normal", "normal"))
 _SALTOS = (("Conservar los saltos de línea", "conservar"), ("Una sola línea", "espacio"))
@@ -33,10 +34,10 @@ class PaginaModos(PaginaBase):
         self.lista = QListWidget()
         self.lista.currentTextChanged.connect(self._al_elegir)
         self.campo_nombre = QLineEdit()
-        self.check_muletillas = Interruptor("Quitar muletillas")
-        self.check_puntuacion = Interruptor("Puntuación y mayúsculas automáticas")
-        self.check_comandos = Interruptor("Comandos de voz")
-        self.check_reescribir = Interruptor("Reescribir con el modelo de lenguaje")
+        self.check_muletillas = Interruptor(texto_de("modo.muletillas").titulo)
+        self.check_puntuacion = Interruptor(texto_de("modo.puntuacion").titulo)
+        self.check_comandos = Interruptor(texto_de("modo.comandos").titulo)
+        self.check_reescribir = Interruptor(texto_de("modo.reescribir").titulo)
         self.campo_instruccion = QPlainTextEdit()
         self.campo_instruccion.setPlaceholderText(
             "Indicación de estilo para la reescritura (opcional)"
@@ -47,6 +48,16 @@ class PaginaModos(PaginaBase):
         self.combo_salto = QComboBox()
         for texto, valor in _SALTOS:
             self.combo_salto.addItem(texto, valor)
+        for control, clave in (
+            (self.check_muletillas, "modo.muletillas"),
+            (self.check_puntuacion, "modo.puntuacion"),
+            (self.check_comandos, "modo.comandos"),
+            (self.check_reescribir, "modo.reescribir"),
+            (self.campo_instruccion, "modo.estilo"),
+            (self.combo_pegado, "modo.pegado"),
+            (self.combo_salto, "modo.saltos"),
+        ):
+            control.setToolTip(ayuda_de(clave))
         boton_nuevo = QPushButton("Nuevo")
         boton_nuevo.clicked.connect(lambda _=False: self.nuevo())
         boton_guardar = QPushButton("Guardar")
@@ -61,9 +72,9 @@ class PaginaModos(PaginaBase):
         formulario.addRow(self.check_puntuacion)
         formulario.addRow(self.check_comandos)
         formulario.addRow(self.check_reescribir)
-        formulario.addRow("Estilo", self.campo_instruccion)
-        formulario.addRow("Pegado", self.combo_pegado)
-        formulario.addRow("Saltos de línea", self.combo_salto)
+        formulario.addRow(texto_de("modo.estilo").titulo, self.campo_instruccion)
+        formulario.addRow(texto_de("modo.pegado").titulo, self.combo_pegado)
+        formulario.addRow(texto_de("modo.saltos").titulo, self.combo_salto)
         botones = QHBoxLayout()
         for boton in (boton_nuevo, boton_guardar, self.boton_borrar):
             botones.addWidget(boton)
@@ -74,7 +85,8 @@ class PaginaModos(PaginaBase):
         self.campo_aplicacion = QLineEdit()
         self.campo_aplicacion.setPlaceholderText("Identificador de la aplicación, p. ej. ptyxis")
         self.combo_modo_de_aplicacion = QComboBox()
-        self.check_terminal = Interruptor("Marcar como terminal")
+        self.check_terminal = Interruptor(texto_de("modo.terminal").titulo)
+        self.check_terminal.setToolTip(ayuda_de("modo.terminal"))
         asignar = QPushButton("Asignar")
         asignar.clicked.connect(
             lambda _=False: self.asignar(

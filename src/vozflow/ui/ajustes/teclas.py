@@ -1,10 +1,10 @@
-"""Página de teclas de los ajustes (RF-003, RF-029): capturar, avisar si choca y aplicar en vivo."""
+"""Captura de teclas y la página «Otras teclas» de los ajustes (RF-003, RF-029, 002)."""
 
 from collections.abc import Callable, Mapping
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent, QKeySequence
-from PySide6.QtWidgets import QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QWidget
+from PySide6.QtWidgets import QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from vozflow.atajos.compuesta import NingunAdaptadorSirve
 from vozflow.atajos.evdev import SinPermisoDeTeclado, SinTeclados
@@ -13,7 +13,9 @@ from vozflow.atajos.puerto import AccionDeAtajo, AtajoOcupado
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.errores import DatoInvalido
 from vozflow.servicio_dbus import InstanciaYaEnEjecucion
-from vozflow.ui.componentes import FilaDeTeclas
+from vozflow.ui.ajustes.base import PaginaBase
+from vozflow.ui.componentes import FilaDeAjuste, FilaDeTeclas
+from vozflow.ui.textos import ayuda_de, texto_de
 
 _DESFASE_XCB = 8  # el servidor gráfico suma 8 al código de tecla de Linux
 _MODIFICADORES_POR_LADO = {  # código de Linux → nombre con lado
@@ -109,7 +111,7 @@ class CampoDeAtajo(QLineEdit):
         self.atajo_cambiado.emit(valor)
 
 
-_ERRORES_DE_LA_ESCUCHA = (
+ERRORES_DE_LA_ESCUCHA = (
     AtajoOcupado,
     NingunAdaptadorSirve,
     InstanciaYaEnEjecucion,
@@ -121,7 +123,14 @@ _ERRORES_DE_LA_ESCUCHA = (
 )
 
 
-class PaginaTeclas(QWidget):
+class PaginaTeclas(PaginaBase):
+    """«Otras teclas» (Avanzado): empezar y terminar, y dictar y traducir.
+
+    La tecla para dictar está en «Dictado»; aquí se validan juntas las tres, así que nunca se pisan.
+    """
+
+    CLAVES = ("atajo.alternar", "atajo.traducir")
+
     def __init__(
         self,
         ajustes: AjustesRepo,
@@ -130,54 +139,53 @@ class PaginaTeclas(QWidget):
         super().__init__()
         self._ajustes = ajustes
         self._aplicar_en_vivo = aplicar_en_vivo
-        self.mensaje = ""
-        self.hay_error = False
-        self.campo_mantener = CampoDeAtajo(permitir_modificador_solo=True)
         self.campo_alternar = CampoDeAtajo(permitir_modificador_solo=False)
         self.campo_traducir = CampoDeAtajo(permitir_modificador_solo=True)
-        self._etiqueta = QLabel()
-        self._etiqueta.setWordWrap(True)
+        self._teclas = {"alternar": FilaDeTeclas(), "traducir": FilaDeTeclas()}
+        self.campo_alternar.atajo_mostrado.connect(self._teclas["alternar"].establecer)
+        self.campo_traducir.atajo_mostrado.connect(self._teclas["traducir"].establecer)
         aplicar = QPushButton("Aplicar")
         aplicar.setProperty("principal", True)
         aplicar.clicked.connect(lambda _=False: self.aplicar())
-        restablecer = QPushButton("Restablecer")
-        restablecer.clicked.connect(lambda _=False: self.restablecer())
-        formulario = QFormLayout(self)
-        self._filas = {
-            "mantener": FilaDeTeclas(),
-            "alternar": FilaDeTeclas(),
-            "traducir": FilaDeTeclas(),
+        self.filas = {
+            "atajo.alternar": self._fila("atajo.alternar", self.campo_alternar, "alternar"),
+            "atajo.traducir": self._fila("atajo.traducir", self.campo_traducir, "traducir"),
         }
-        for clave, campo in (
-            ("mantener", self.campo_mantener),
-            ("alternar", self.campo_alternar),
-            ("traducir", self.campo_traducir),
-        ):
-            campo.atajo_mostrado.connect(self._filas[clave].establecer)
-        formulario.addRow("Mantener para hablar", self.campo_mantener)
-        formulario.addRow("", self._filas["mantener"])
-        formulario.addRow("Pulsar para empezar y terminar", self.campo_alternar)
-        formulario.addRow("", self._filas["alternar"])
-        formulario.addRow("Mantener para hablar y traducir", self.campo_traducir)
-        formulario.addRow("", self._filas["traducir"])
-        botones = QHBoxLayout()
-        botones.addWidget(aplicar)
-        botones.addWidget(restablecer)
-        formulario.addRow(botones)
-        formulario.addRow(self._etiqueta)
+        columna = QVBoxLayout(self)
+        for fila in self.filas.values():
+            columna.addWidget(fila)
+        columna.addWidget(aplicar)
+        columna.addWidget(self._etiqueta_mensaje)
+        columna.addStretch()
         self._mostrar_actuales()
 
+    def _fila(self, clave: str, campo: CampoDeAtajo, cual: str) -> FilaDeAjuste:
+        control = QWidget()
+        caja = QVBoxLayout(control)
+        caja.setContentsMargins(0, 0, 0, 0)
+        caja.addWidget(self._teclas[cual])
+        caja.addWidget(campo)
+        return FilaDeAjuste(
+            texto_de(clave).titulo,
+            ayuda_de(clave),
+            control,
+            restablecer=lambda: self._restablecer(clave),
+            es_el_original=lambda: self._ajustes.obtener(clave) == self._ajustes.defecto(clave),
+        )
+
     def teclas_mostradas(self, cual: str) -> list[str]:
-        return self._filas[cual].textos()
+        return self._teclas[cual].textos()
 
     def aplicar(self) -> None:
         """Valida, prueba las teclas nuevas en la escucha en vivo y recién entonces las guarda."""
         try:
             nuevos = self._ajustes.validar_atajos(
-                self.campo_mantener.atajo, self.campo_alternar.atajo, self.campo_traducir.atajo
+                self._ajustes.obtener("atajo.mantener"),
+                self.campo_alternar.atajo,
+                self.campo_traducir.atajo,
             )
             if nuevos == self._actuales():
-                self._avisar("No hay cambios que aplicar.", error=False)
+                self.avisar("No hay cambios que aplicar.")
                 return
             mantener, alternar, traducir = nuevos
             self._aplicar_en_vivo(
@@ -188,16 +196,15 @@ class PaginaTeclas(QWidget):
                 }
             )
             self._ajustes.establecer_atajos(mantener, alternar, traducir)
-        except (DatoInvalido, *_ERRORES_DE_LA_ESCUCHA) as error:
-            self._avisar(str(error), error=True)
+        except (DatoInvalido, *ERRORES_DE_LA_ESCUCHA) as error:
+            self.avisar(str(error), error=True)
             return
         self._mostrar_actuales()
-        self._avisar("Los atajos se aplicaron: ya funcionan, sin reiniciar.", error=False)
+        self.avisar("Listo: las teclas ya funcionan, sin reiniciar.")
 
-    def restablecer(self) -> None:
-        self.campo_mantener.atajo = self._ajustes.defecto("atajo.mantener")
-        self.campo_alternar.atajo = self._ajustes.defecto("atajo.alternar")
-        self.campo_traducir.atajo = self._ajustes.defecto("atajo.traducir")
+    def _restablecer(self, clave: str) -> None:
+        campo = self.campo_alternar if clave == "atajo.alternar" else self.campo_traducir
+        campo.atajo = str(self._ajustes.defecto(clave))
         self.aplicar()
 
     def _actuales(self) -> tuple[str, str, str]:
@@ -208,15 +215,8 @@ class PaginaTeclas(QWidget):
         )
 
     def _mostrar_actuales(self) -> None:
-        mantener, alternar, traducir = self._actuales()
-        self.campo_mantener.atajo = mantener
+        _, alternar, traducir = self._actuales()
         self.campo_alternar.atajo = alternar
         self.campo_traducir.atajo = traducir
-
-    def _avisar(self, texto: str, *, error: bool) -> None:
-        self.mensaje, self.hay_error = texto, error
-        self._etiqueta.setText(texto)
-        self._etiqueta.setProperty("error", error)
-        self._etiqueta.setProperty("exito", not error)
-        self._etiqueta.style().unpolish(self._etiqueta)
-        self._etiqueta.style().polish(self._etiqueta)
+        for fila in getattr(self, "filas", {}).values():
+            fila.refrescar()

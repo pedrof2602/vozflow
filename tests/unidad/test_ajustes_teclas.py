@@ -161,7 +161,7 @@ def test_avisa_cuando_cambia(qtbot: QtBot) -> None:
     assert senal.args == ["F10"]
 
 
-# ---- la página -------------------------------------------------------------------------------------------------------
+# ---- la página «Otras teclas» (002: la tecla de dictar pasó a «Dictado») ---------------------------------------
 
 
 class Aplicador:
@@ -185,24 +185,24 @@ def _pagina(qtbot: QtBot) -> tuple[PaginaTeclas, AjustesRepo, Aplicador]:
     return pagina, ajustes, aplicador
 
 
-def test_muestra_los_atajos_actuales(qtbot: QtBot) -> None:
-    pagina, ajustes, _ = _pagina(qtbot)
+def test_muestra_las_otras_dos_teclas_y_no_la_de_dictar(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
 
-    assert pagina.campo_mantener.atajo == "RightCtrl"
     assert pagina.campo_alternar.atajo == "<Control><Alt>space"
+    assert pagina.campo_traducir.atajo == "RightAlt"
+    assert not hasattr(pagina, "campo_mantener")
 
 
 def test_aplicar_cambia_los_atajos_en_vivo_y_los_guarda(qtbot: QtBot) -> None:
     pagina, ajustes, aplicador = _pagina(qtbot)
-    pagina.campo_mantener.atajo = "F9"
     pagina.campo_alternar.atajo = "Ctrl+Alt+D"
 
     pagina.aplicar()
 
-    assert aplicador.recibidos == [{M: "F9", A: "<Control><Alt>d", T: "RightAlt"}]
-    assert ajustes.obtener("atajo.mantener") == "F9"
+    assert aplicador.recibidos == [{M: "RightCtrl", A: "<Control><Alt>d", T: "RightAlt"}]
     assert ajustes.obtener("atajo.alternar") == "<Control><Alt>d"
-    assert "aplicaron" in pagina.mensaje.lower()
+    assert ajustes.obtener("atajo.mantener") == "RightCtrl"
+    assert "ya funcionan" in pagina.mensaje.lower()
 
 
 def test_si_choca_con_otra_funcion_avisa_y_no_guarda_nada(qtbot: QtBot) -> None:
@@ -224,13 +224,24 @@ def test_un_atajo_invalido_se_rechaza_sin_tocar_la_escucha(qtbot: QtBot) -> None
     pagina.aplicar()
 
     assert pagina.hay_error is True and aplicador.recibidos == []
-    assert ajustes.obtener("atajo.mantener") == "RightCtrl"
+    assert ajustes.obtener("atajo.alternar") == "<Control><Alt>space"
 
 
-def test_dos_atajos_iguales_se_rechazan(qtbot: QtBot) -> None:
+def test_no_puede_repetir_la_tecla_para_dictar(qtbot: QtBot) -> None:
+    pagina, ajustes, aplicador = _pagina(qtbot)
+    ajustes.establecer("atajo.mantener", "F9")  # la tecla para dictar se cambia en «Dictado»
+    pagina.campo_alternar.atajo = "F9"
+
+    pagina.aplicar()
+
+    assert "distint" in pagina.mensaje and aplicador.recibidos == []
+    assert ajustes.obtener("atajo.alternar") == "<Control><Alt>space"
+
+
+def test_las_dos_teclas_de_la_pagina_no_pueden_ser_iguales(qtbot: QtBot) -> None:
     pagina, _, aplicador = _pagina(qtbot)
-    pagina.campo_mantener.atajo = "Ctrl+Alt+D"
     pagina.campo_alternar.atajo = "Ctrl+Alt+D"
+    pagina.campo_traducir.atajo = "Ctrl+Alt+D"
 
     pagina.aplicar()
 
@@ -240,23 +251,44 @@ def test_dos_atajos_iguales_se_rechazan(qtbot: QtBot) -> None:
 def test_si_la_escucha_falla_por_otra_razon_se_explica(qtbot: QtBot) -> None:
     pagina, ajustes, aplicador = _pagina(qtbot)
     aplicador.error = RuntimeError("esperá a que termine el dictado")
-    pagina.campo_mantener.atajo = "F9"
+    pagina.campo_alternar.atajo = "Ctrl+Alt+D"
 
     pagina.aplicar()
 
-    assert "esperá" in pagina.mensaje and ajustes.obtener("atajo.mantener") == "RightCtrl"
+    assert "esperá" in pagina.mensaje
+    assert ajustes.obtener("atajo.alternar") == "<Control><Alt>space"
 
 
-def test_restablecer_vuelve_a_los_valores_de_fabrica(qtbot: QtBot) -> None:
+def test_restablecer_cada_tecla_vuelve_a_fabrica_y_lo_aplica(qtbot: QtBot) -> None:
     pagina, ajustes, aplicador = _pagina(qtbot)
-    pagina.campo_mantener.atajo = "F9"
+    pagina.campo_alternar.atajo = "Ctrl+Alt+D"
+    pagina.campo_traducir.atajo = "F10"
     pagina.aplicar()
+    fila_alternar = pagina.filas["atajo.alternar"]
+    fila_traducir = pagina.filas["atajo.traducir"]
+    assert (
+        fila_alternar.boton_restablecer is not None
+        and not fila_alternar.boton_restablecer.isHidden()
+    )
 
-    pagina.restablecer()
+    fila_alternar.boton_restablecer.click()
+    assert fila_traducir.boton_restablecer is not None
+    fila_traducir.boton_restablecer.click()
 
-    assert ajustes.obtener("atajo.mantener") == "RightCtrl"
+    assert ajustes.obtener("atajo.alternar") == "<Control><Alt>space"
+    assert ajustes.obtener("atajo.traducir") == "RightAlt"
     assert aplicador.recibidos[-1] == {M: "RightCtrl", A: "<Control><Alt>space", T: "RightAlt"}
-    assert pagina.campo_mantener.atajo == "RightCtrl"
+    assert pagina.campo_alternar.atajo == "<Control><Alt>space"
+    assert pagina.campo_traducir.atajo == "RightAlt"
+
+
+def test_con_las_teclas_de_fabrica_no_hay_restablecer(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    assert all(
+        f.boton_restablecer is not None and f.boton_restablecer.isHidden()
+        for f in pagina.filas.values()
+    )
 
 
 def test_aplicar_sin_cambios_no_toca_la_escucha(qtbot: QtBot) -> None:
@@ -268,12 +300,6 @@ def test_aplicar_sin_cambios_no_toca_la_escucha(qtbot: QtBot) -> None:
 
 
 # ---- la tecla de traducir (lote 6) ----------------------------------------------------------------------
-
-
-def test_muestra_la_tecla_de_traducir(qtbot: QtBot) -> None:
-    pagina, _, _ = _pagina(qtbot)
-
-    assert pagina.campo_traducir.atajo == "RightAlt"
 
 
 def test_cambiar_la_de_traducir_se_aplica_en_vivo_y_se_guarda(qtbot: QtBot) -> None:
@@ -288,7 +314,7 @@ def test_cambiar_la_de_traducir_se_aplica_en_vivo_y_se_guarda(qtbot: QtBot) -> N
 
 def test_la_de_traducir_no_puede_repetir_otra_tecla(qtbot: QtBot) -> None:
     pagina, ajustes, aplicador = _pagina(qtbot)
-    pagina.campo_traducir.atajo = "RightCtrl"  # es la de mantener
+    pagina.campo_traducir.atajo = "RightCtrl"  # es la de dictar
 
     pagina.aplicar()
 
@@ -316,13 +342,12 @@ def test_la_de_traducir_acepta_un_modificador_solo(qtbot: QtBot) -> None:
     assert pagina.campo_traducir.atajo == "RightShift"
 
 
-# ---- teclas dibujadas (lote 7) -------------------------------------------------------------------------------
+# ---- teclas dibujadas y ayuda (lote 7 y 002) -------------------------------------------------------------
 
 
 def test_cada_atajo_se_muestra_como_teclas_dibujadas(qtbot: QtBot) -> None:
     pagina, _, _ = _pagina(qtbot)
 
-    assert pagina.teclas_mostradas("mantener") == ["Ctrl der."]
     assert pagina.teclas_mostradas("alternar") == ["Ctrl", "Alt", "Espacio"]
     assert pagina.teclas_mostradas("traducir") == ["Alt der."]
 
@@ -330,6 +355,22 @@ def test_cada_atajo_se_muestra_como_teclas_dibujadas(qtbot: QtBot) -> None:
 def test_las_teclas_dibujadas_siguen_al_campo(qtbot: QtBot) -> None:
     pagina, _, _ = _pagina(qtbot)
 
-    pagina.campo_mantener.atajo = "F9"
+    pagina.campo_traducir.atajo = "F9"
 
-    assert pagina.teclas_mostradas("mantener") == ["F9"]
+    assert pagina.teclas_mostradas("traducir") == ["F9"]
+
+
+def test_cada_tecla_lleva_su_titulo_y_su_ayuda_en_lenguaje_llano(qtbot: QtBot) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    from vozflow.ui.textos import ayuda_de, texto_de
+
+    pagina, _, _ = _pagina(qtbot)
+    textos = [e.text() for e in pagina.findChildren(QLabel)]
+
+    for clave in ("atajo.alternar", "atajo.traducir"):
+        assert texto_de(clave).titulo in textos and ayuda_de(clave) in textos
+
+
+def test_estan_las_claves_para_el_inventario() -> None:
+    assert PaginaTeclas.CLAVES == ("atajo.alternar", "atajo.traducir")

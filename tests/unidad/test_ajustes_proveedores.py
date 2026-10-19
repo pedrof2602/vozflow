@@ -240,3 +240,50 @@ def test_explica_que_la_traduccion_usa_el_mismo_servicio(qtbot: QtBot) -> None:
     pagina, _, _ = _pagina(qtbot)
 
     assert "tecla de traducir" in pagina.aclaracion_de_traduccion.text().lower()
+
+
+# ---- presentación como función opcional y privacidad (002, RP-020) --------------------------------------------
+
+
+def test_la_pagina_dice_que_es_opcional_y_viene_apagada(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    texto = pagina.aviso_de_privacidad.text().lower()
+
+    assert "opcional" in texto and "apagado" in texto
+
+
+def test_la_pagina_dice_que_sale_del_equipo_y_que_el_audio_nunca(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+
+    texto = pagina.aviso_de_privacidad.text().lower()
+
+    assert "texto" in texto and "audio nunca" in texto
+
+
+def test_las_etiquetas_usan_los_textos_llanos(qtbot: QtBot) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    from vozflow.ui.textos import texto_de
+
+    pagina, _, _ = _pagina(qtbot)
+    etiquetas = [e.text() for e in pagina.findChildren(QLabel)]
+
+    for clave in ("proveedor.modelo", "proveedor.tiempo", "proveedor.direccion", "proveedor.clave"):
+        assert texto_de(clave).titulo in etiquetas
+
+
+def test_cada_campo_lleva_su_ayuda_como_pista(qtbot: QtBot) -> None:
+    from vozflow.ui.textos import ayuda_de
+
+    pagina, _, _ = _pagina(qtbot)
+
+    assert pagina.campo_modelo.toolTip() == ayuda_de("proveedor.modelo")
+    assert pagina.spin_tiempo.toolTip() == ayuda_de("proveedor.tiempo")
+    assert pagina.campo_direccion.toolTip() == ayuda_de("proveedor.direccion")
+    assert pagina.campo_clave.toolTip() == ayuda_de("proveedor.clave")
+    assert pagina.combo_idioma.toolTip() == ayuda_de("traduccion.idioma")
+
+
+def test_la_pagina_declara_sus_claves_para_el_inventario() -> None:
+    assert set(PaginaProveedores.CLAVES) == {"reescritura.activa", "traduccion.idioma"}

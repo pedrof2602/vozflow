@@ -33,13 +33,13 @@ from vozflow.persistencia.diccionario_repo import DiccionarioRepo
 from vozflow.persistencia.historial import HistorialRepo
 from vozflow.persistencia.modos_repo import ModosRepo
 from vozflow.reescritura import FabricaDeReescritor
-from vozflow.ui.ajustes.apariencia import PaginaApariencia
-from vozflow.ui.ajustes.audio import PaginaAudio
 from vozflow.ui.ajustes.copia import PaginaCopia
+from vozflow.ui.ajustes.dictado import PaginaDictado
+from vozflow.ui.ajustes.general import PaginaGeneral
 from vozflow.ui.ajustes.historial import PaginaHistorial
+from vozflow.ui.ajustes.modelo import PaginaModelo
 from vozflow.ui.ajustes.modos import PaginaModos
 from vozflow.ui.ajustes.proveedores import PaginaProveedores
-from vozflow.ui.ajustes.sistema import PaginaSistema
 from vozflow.ui.ajustes.teclas import PaginaTeclas
 from vozflow.ui.ajustes.vocabulario import PaginaVocabulario
 from vozflow.ui.estado import VistaDeEstado, vista_de
@@ -68,67 +68,74 @@ class ContextoDeAjustes:
     aplicar_tema: Callable[[str], None] = lambda modo: None
     autoinicio_activo: Callable[[], bool] = lambda: False
     fijar_autoinicio: Callable[[bool], None] = lambda activo: None
+    repetir_asistente: Callable[[], None] = lambda: None
 
 
 def crear_paginas(
     contexto: ContextoDeAjustes, al_reinsertar: Callable[[Callable[[], None]], None]
 ) -> dict[str, QWidget]:
+    """Primero las páginas básicas y después las de «Avanzado», en el orden de la barra."""
     base = contexto.base
     ajustes = AjustesRepo(base)
     modos = ModosRepo(base)
     return {
-        "Teclas": PaginaTeclas(ajustes, contexto.aplicar_atajos),
-        "Audio": PaginaAudio(ajustes, contexto.listar_dispositivos),
-        "Modos": PaginaModos(modos, AsignacionesRepo(base)),
+        "Dictado": PaginaDictado(ajustes, contexto.aplicar_atajos, contexto.listar_dispositivos),
         "Vocabulario": PaginaVocabulario(DiccionarioRepo(base), AtajosTextoRepo(base)),
-        "Reescritura": PaginaProveedores(
-            GestionDeProveedores(base, contexto.claves, contexto.crear_reescritor)
-        ),
-        "Copia": PaginaCopia(CopiaRepo(base)),
         "Historial": PaginaHistorial(
             HistorialRepo(base, activo=lambda: bool(ajustes.obtener("historial.activo"))),
             contexto.portapapeles,
             contexto.insertor,
             al_reinsertar,
+            ajustes=ajustes,
         ),
-        "Apariencia": PaginaApariencia(ajustes, contexto.aplicar_tema),
-        "Sistema": PaginaSistema(contexto.autoinicio_activo, contexto.fijar_autoinicio),
+        "General": PaginaGeneral(
+            ajustes,
+            contexto.aplicar_tema,
+            contexto.autoinicio_activo,
+            contexto.fijar_autoinicio,
+            contexto.repetir_asistente,
+        ),
+        "Otras teclas": PaginaTeclas(ajustes, contexto.aplicar_atajos),
+        "Modos": PaginaModos(modos, AsignacionesRepo(base)),
+        "Modelo y rendimiento": PaginaModelo(ajustes),
+        "Asistente de IA": PaginaProveedores(
+            GestionDeProveedores(base, contexto.claves, contexto.crear_reescritor)
+        ),
+        "Copia de seguridad": PaginaCopia(CopiaRepo(base)),
     }
 
 
+AVANZADO = "Avanzado"
 GRUPOS_POR_DEFECTO = {
-    "Historial": "INICIO",
-    "Modos": "TEXTO",
-    "Vocabulario": "TEXTO",
-    "Teclas": "DICTADO",
-    "Audio": "DICTADO",
-    "Reescritura": "INTELIGENCIA ARTIFICIAL",
-    "Copia": "DATOS",
-    "Apariencia": "APLICACIÓN",
-    "Sistema": "APLICACIÓN",
+    "Otras teclas": AVANZADO,
+    "Modos": AVANZADO,
+    "Modelo y rendimiento": AVANZADO,
+    "Asistente de IA": AVANZADO,
+    "Copia de seguridad": AVANZADO,
 }
-ORDEN_DE_GRUPOS = ["INICIO", "TEXTO", "DICTADO", "INTELIGENCIA ARTIFICIAL", "DATOS", "APLICACIÓN"]
+ORDEN_DE_GRUPOS = [AVANZADO]
+PLEGADOS_POR_DEFECTO = (AVANZADO,)
 _ICONOS_POR_PAGINA = {
-    "Historial": "historial",
-    "Modos": "modos",
+    "Dictado": "audio",
     "Vocabulario": "vocabulario",
-    "Teclas": "teclas",
-    "Audio": "audio",
-    "Reescritura": "reescritura",
-    "Copia": "copia",
-    "Apariencia": "ajustes",
-    "Sistema": "ajustes",
+    "Historial": "historial",
+    "General": "ajustes",
+    "Otras teclas": "teclas",
+    "Modos": "modos",
+    "Modelo y rendimiento": "ajustes",
+    "Asistente de IA": "reescritura",
+    "Copia de seguridad": "copia",
 }
 _DESCRIPCIONES_POR_DEFECTO = {
+    "Dictado": "Lo básico para dictar: tu tecla, tu micrófono y tu idioma",
+    "Vocabulario": "Palabras propias y atajos para escribir textos largos con una frase",
     "Historial": "Lo que dictaste, para buscarlo y volver a usarlo",
+    "General": "Cómo se ve y cómo arranca vozflow",
+    "Otras teclas": "Más formas de empezar a dictar y de traducir",
     "Modos": "Cómo se pule el texto según la aplicación",
-    "Vocabulario": "Palabras propias y atajos de texto",
-    "Teclas": "Con qué teclas se empieza y se termina de dictar",
-    "Audio": "El micrófono que se escucha",
-    "Reescritura": "Mejora y traducción con un modelo de lenguaje, solo si lo prendés",
-    "Copia": "Exportar e importar tus datos",
-    "Apariencia": "Tema claro, oscuro o el del sistema",
-    "Sistema": "Cómo arranca vozflow",
+    "Modelo y rendimiento": "Qué modelo de voz usa y cuánto trabaja tu computadora",
+    "Asistente de IA": "Mejora y traducción con un servicio externo, solo si lo prendés",
+    "Copia de seguridad": "Guardá o recuperá tu vocabulario, atajos y modos",
 }
 
 
@@ -143,6 +150,7 @@ class VentanaAjustes(QMainWindow):
         grupos: Mapping[str, str] | None = None,
         orden_de_grupos: Sequence[str] | None = None,
         descripciones: Mapping[str, str] | None = None,
+        plegados: Sequence[str] | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("vozflow — Ajustes")
@@ -155,6 +163,10 @@ class VentanaAjustes(QMainWindow):
         self._orden_de_grupos = list(
             ORDEN_DE_GRUPOS if orden_de_grupos is None else orden_de_grupos
         )
+        self._plegados = tuple(PLEGADOS_POR_DEFECTO if plegados is None else plegados)
+        self._abiertos: dict[str, bool] = {}
+        self._encabezados: dict[str, QPushButton] = {}
+        self._contenedores: dict[str, QWidget] = {}
         self._descripciones = dict(
             _DESCRIPCIONES_POR_DEFECTO if descripciones is None else descripciones
         )
@@ -230,7 +242,9 @@ class VentanaAjustes(QMainWindow):
             if widget is not None:
                 widget.setParent(None)
         self._botones.clear()
-        self._etiquetas: list[QLabel] = []
+        self._encabezados.clear()
+        self._contenedores.clear()
+        self._etiquetas: list[QWidget] = []
         por_grupo: dict[str, list[str]] = {}
         for nombre in self._paginas:
             por_grupo.setdefault(self._grupos.get(nombre, ""), []).append(nombre)
@@ -239,14 +253,49 @@ class VentanaAjustes(QMainWindow):
         sin_grupo = por_grupo.get("", [])
         self._orden = []
         for grupo in ([""] if sin_grupo else []) + etiquetas:
-            if grupo:
+            lugar: QVBoxLayout | None = None
+            if grupo in self._plegados:
+                encabezado = self._crear_encabezado(grupo)
+                self._encabezados[grupo] = encabezado
+                self._etiquetas.append(encabezado)
+                self._lugar_de_botones.addWidget(encabezado)
+                contenedor = QWidget()
+                lugar = QVBoxLayout(contenedor)
+                lugar.setContentsMargins(0, 0, 0, 0)
+                lugar.setSpacing(2)
+                self._contenedores[grupo] = contenedor
+                self._lugar_de_botones.addWidget(contenedor)
+                self._abiertos.setdefault(grupo, False)
+            elif grupo:
                 etiqueta = QLabel(grupo)
                 etiqueta.setObjectName("grupo")
                 self._etiquetas.append(etiqueta)
                 self._lugar_de_botones.addWidget(etiqueta)
             for nombre in por_grupo[grupo]:
-                self._lugar_de_botones.addWidget(self._crear_boton(nombre))
+                boton = self._crear_boton(nombre)
+                (lugar or self._lugar_de_botones).addWidget(boton)
                 self._orden.append(nombre)
+        for grupo in self._plegados:
+            if grupo in self._contenedores:
+                self._mostrar_grupo(grupo)
+
+    def _crear_encabezado(self, grupo: str) -> QPushButton:
+        encabezado = QPushButton(grupo)
+        encabezado.setProperty("grupo", True)
+        encabezado.setCursor(Qt.CursorShape.PointingHandCursor)
+        encabezado.clicked.connect(lambda _=False, g=grupo: self._alternar_grupo(g))
+        return encabezado
+
+    def _alternar_grupo(self, grupo: str) -> None:
+        self._abiertos[grupo] = not self._abiertos[grupo]
+        self._mostrar_grupo(grupo)
+
+    def _mostrar_grupo(self, grupo: str) -> None:
+        abierto = self._abiertos[grupo]
+        self._contenedores[grupo].setVisible(abierto)
+        self._encabezados[grupo].setIcon(
+            icono("abajo" if abierto else "derecha", paleta_actual().texto_atenuado, 14)
+        )
 
     def _crear_boton(self, nombre: str) -> QPushButton:
         boton = QPushButton(nombre)
@@ -261,6 +310,10 @@ class VentanaAjustes(QMainWindow):
         return boton
 
     def _elegir(self, nombre: str) -> None:
+        grupo = self._grupos.get(nombre, "")
+        if grupo in self._contenedores and not self._abiertos[grupo]:
+            self._abiertos[grupo] = True  # una página escondida no se puede elegir a ciegas
+            self._mostrar_grupo(grupo)
         self._actual = nombre
         self._pila.setCurrentIndex(self._indices[nombre])
         self._botones[nombre].setChecked(True)
@@ -285,12 +338,21 @@ class VentanaAjustes(QMainWindow):
             boton.setIcon(
                 icono(_ICONOS_POR_PAGINA.get(nombre, "ajustes"), paleta_actual().texto_atenuado, 18)
             )
+        for grupo in self._contenedores:
+            self._mostrar_grupo(grupo)
 
     def nombres_de_paginas(self) -> list[str]:
         return list(self._orden)
 
     def etiquetas_de_grupo(self) -> list[str]:
-        return [e.text() for e in self._etiquetas]
+        return [getattr(e, "text")() for e in self._etiquetas]  # noqa: B009
+
+    def encabezado_de_grupo(self, grupo: str) -> QPushButton:
+        """El botón que pliega o despliega un grupo («Avanzado»)."""
+        return self._encabezados[grupo]
+
+    def grupo_abierto(self, grupo: str) -> bool:
+        return self._abiertos.get(grupo, True)
 
     def botones_de_navegacion(self) -> list[QPushButton]:
         return [self._botones[n] for n in self._orden]

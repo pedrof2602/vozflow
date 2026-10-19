@@ -279,3 +279,78 @@ def test_los_chips_vacios_no_fallan(qtbot: QtBot) -> None:
 
     assert chips.count() == 0 and chips.currentIndex() == -1 and chips.currentData() is None
     assert chips.currentText() == ""
+
+
+# ---- «Restablecer» por opción (002, RP-019) ---------------------------------------------------------------
+
+
+def _fila_con_restablecer(qtbot: QtBot, original: list[bool]):  # type: ignore[no-untyped-def]
+    llamadas: list[int] = []
+
+    def restablecer() -> None:
+        llamadas.append(1)
+        original[0] = True
+
+    fila = FilaDeAjuste(
+        "Tecla",
+        "Ayuda",
+        Interruptor(),
+        restablecer=restablecer,
+        es_el_original=lambda: original[0],
+    )
+    qtbot.addWidget(fila)
+    fila.show()
+    return fila, llamadas
+
+
+def test_con_el_valor_original_no_se_ofrece_restablecer(qtbot: QtBot) -> None:
+    fila, _ = _fila_con_restablecer(qtbot, [True])
+
+    assert fila.boton_restablecer is not None and fila.boton_restablecer.isHidden() is True
+
+
+def test_si_el_valor_cambio_aparece_restablecer(qtbot: QtBot) -> None:
+    original = [False]
+    fila, _ = _fila_con_restablecer(qtbot, original)
+
+    fila.refrescar()
+
+    assert fila.boton_restablecer is not None and fila.boton_restablecer.isHidden() is False
+    assert fila.boton_restablecer.text() == "Restablecer"
+
+
+def test_pulsar_restablecer_llama_al_callback_y_el_boton_desaparece(qtbot: QtBot) -> None:
+    original = [False]
+    fila, llamadas = _fila_con_restablecer(qtbot, original)
+    fila.refrescar()
+
+    fila.boton_restablecer.click()
+
+    assert llamadas == [1]
+    assert fila.boton_restablecer is not None and fila.boton_restablecer.isHidden() is True
+
+
+def test_si_el_valor_vuelve_a_cambiar_el_boton_reaparece(qtbot: QtBot) -> None:
+    original = [True]
+    fila, _ = _fila_con_restablecer(qtbot, original)
+
+    original[0] = False
+    fila.refrescar()
+
+    assert fila.boton_restablecer is not None and fila.boton_restablecer.isHidden() is False
+
+
+def test_una_fila_sin_restablecer_no_lo_tiene(qtbot: QtBot) -> None:
+    fila = FilaDeAjuste("Algo", "Ayuda", Interruptor())
+    qtbot.addWidget(fila)
+
+    assert fila.boton_restablecer is None
+    fila.refrescar()  # no falla
+
+
+def test_la_ayuda_se_ve_siempre_debajo_del_titulo(qtbot: QtBot) -> None:
+    fila, _ = _fila_con_restablecer(qtbot, [True])
+
+    textos = [e.text() for e in fila.findChildren(QLabel)]
+
+    assert "Ayuda" in textos

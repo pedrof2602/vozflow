@@ -17,8 +17,11 @@ from PySide6.QtWidgets import (
 from vozflow.dominio.historial import Dictado
 from vozflow.insercion.puerto import Destino, Insertor
 from vozflow.mensajes import explicar
+from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.historial import HistorialRepo
 from vozflow.ui.ajustes.base import PaginaBase
+from vozflow.ui.componentes import FilaDeAjuste, Interruptor
+from vozflow.ui.textos import ayuda_de, texto_de
 
 _LIMITE = 200
 _RESUMEN = 70
@@ -39,6 +42,8 @@ def _linea(dictado: Dictado) -> str:
 
 
 class PaginaHistorial(PaginaBase):
+    CLAVES = ("historial.activo",)
+
     def __init__(
         self,
         historial: HistorialRepo,
@@ -46,6 +51,7 @@ class PaginaHistorial(PaginaBase):
         insertor: Insertor,
         al_reinsertar: Callable[[Callable[[], None]], None],
         destino: Destino | None = None,
+        ajustes: AjustesRepo | None = None,
     ) -> None:
         super().__init__()
         self._historial = historial
@@ -53,6 +59,7 @@ class PaginaHistorial(PaginaBase):
         self._insertor = insertor
         self._al_reinsertar = al_reinsertar
         self._destino = destino or Destino()
+        self._ajustes = ajustes
         self._ids: list[int] = []
         self._dictados: dict[int, Dictado] = {}
         self.aviso_apagado = QLabel()
@@ -77,7 +84,19 @@ class PaginaHistorial(PaginaBase):
         ):
             boton.clicked.connect(lambda _=False, a=accion: a())
             botones.addWidget(boton)
+        self.interruptor_guardar: Interruptor | None = None
         columna = QVBoxLayout(self)
+        if ajustes is not None:
+            self.interruptor_guardar = Interruptor()
+            self.interruptor_guardar.setChecked(bool(ajustes.obtener("historial.activo")))
+            self.interruptor_guardar.toggled.connect(self._guardar_o_no)
+            columna.addWidget(
+                FilaDeAjuste(
+                    texto_de("historial.activo").titulo,
+                    ayuda_de("historial.activo"),
+                    self.interruptor_guardar,
+                )
+            )
         columna.addWidget(self.aviso_apagado)
         columna.addWidget(self.campo_busqueda)
         columna.addWidget(self.lista, 2)
@@ -85,6 +104,11 @@ class PaginaHistorial(PaginaBase):
         columna.addWidget(self.vista, 1)
         columna.addLayout(botones)
         columna.addWidget(self._etiqueta_mensaje)
+        self.recargar()
+
+    def _guardar_o_no(self, activo: bool) -> None:
+        if self._ajustes is not None:
+            self._ajustes.establecer("historial.activo", activo)
         self.recargar()
 
     def recargar(self) -> None:

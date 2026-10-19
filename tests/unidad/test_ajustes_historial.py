@@ -269,3 +269,67 @@ def test_si_al_reinsertar_falla_el_aviso_es_el_del_catalogo(qtbot: QtBot) -> Non
     assert pagina.hay_error is True
     assert explicar("pegado_fallo").que_paso in pagina.mensaje
     assert "detalle técnico" not in pagina.mensaje
+
+
+# ---- guardar lo que dictás, con un interruptor (002, RP-015, RP-016) ----------------------------------------
+
+
+def _pagina_con_ajustes(qtbot: QtBot):  # type: ignore[no-untyped-def]
+    from vozflow.persistencia.ajustes import AjustesRepo
+
+    base = abrir_base(":memory:")
+    ajustes = AjustesRepo(base)
+    historial = HistorialRepo(base, activo=lambda: bool(ajustes.obtener("historial.activo")))
+    pagina = PaginaHistorial(
+        historial, Portapapeles(), Insertor(), al_reinsertar=lambda a: a(), ajustes=ajustes
+    )
+    qtbot.addWidget(pagina)
+    pagina.show()
+    return pagina, ajustes
+
+
+def test_el_interruptor_de_guardar_arranca_prendido(qtbot: QtBot) -> None:
+    pagina, _ = _pagina_con_ajustes(qtbot)
+
+    assert pagina.interruptor_guardar is not None and pagina.interruptor_guardar.isChecked()
+
+
+def test_apagar_el_interruptor_deja_de_guardar_y_avisa(qtbot: QtBot) -> None:
+    pagina, ajustes = _pagina_con_ajustes(qtbot)
+
+    assert pagina.interruptor_guardar is not None
+    pagina.interruptor_guardar.setChecked(False)
+
+    assert ajustes.obtener("historial.activo") is False
+    assert "apagado" in pagina.aviso_apagado.text().lower()
+
+
+def test_volver_a_prenderlo_quita_el_aviso(qtbot: QtBot) -> None:
+    pagina, ajustes = _pagina_con_ajustes(qtbot)
+    assert pagina.interruptor_guardar is not None
+    pagina.interruptor_guardar.setChecked(False)
+
+    pagina.interruptor_guardar.setChecked(True)
+
+    assert ajustes.obtener("historial.activo") is True and pagina.aviso_apagado.text() == ""
+
+
+def test_el_interruptor_lleva_titulo_y_ayuda_en_lenguaje_llano(qtbot: QtBot) -> None:
+    from PySide6.QtWidgets import QLabel
+
+    from vozflow.ui.textos import ayuda_de, texto_de
+
+    pagina, _ = _pagina_con_ajustes(qtbot)
+    textos = [e.text() for e in pagina.findChildren(QLabel)]
+
+    assert texto_de("historial.activo").titulo in textos and ayuda_de("historial.activo") in textos
+
+
+def test_sin_ajustes_la_pagina_no_ofrece_el_interruptor(qtbot: QtBot) -> None:
+    pagina, *_ = _pagina(qtbot)
+
+    assert pagina.interruptor_guardar is None
+
+
+def test_la_pagina_declara_su_clave_para_el_inventario() -> None:
+    assert PaginaHistorial.CLAVES == ("historial.activo",)
