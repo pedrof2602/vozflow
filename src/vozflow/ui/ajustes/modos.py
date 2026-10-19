@@ -106,16 +106,17 @@ class PaginaModos(PaginaBase):
         arriba.addLayout(contenedor, 2)
         columna.addLayout(arriba)
         columna.addWidget(self.tabla)
-        fila = QHBoxLayout()
-        for widget in (
-            self.campo_aplicacion,
-            self.combo_modo_de_aplicacion,
-            self.check_terminal,
-            asignar,
-            quitar,
-        ):
-            fila.addWidget(widget)
-        columna.addLayout(fila)
+        # Dos filas y no una: en una sola, con una letra más ancha, la página pedía más ancho
+        # del que tiene la ventana.
+        fila_de_campos = QHBoxLayout()
+        fila_de_campos.addWidget(self.campo_aplicacion, 1)
+        fila_de_campos.addWidget(self.combo_modo_de_aplicacion)
+        fila_de_botones = QHBoxLayout()
+        for widget in (self.check_terminal, asignar, quitar):
+            fila_de_botones.addWidget(widget)
+        fila_de_botones.addStretch()
+        columna.addLayout(fila_de_campos)
+        columna.addLayout(fila_de_botones)
         columna.addWidget(self._etiqueta_mensaje)
         self._recargar()
         self.seleccionar("General")
