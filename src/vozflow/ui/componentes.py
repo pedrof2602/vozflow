@@ -1,4 +1,4 @@
-"""Componentes propios del aspecto de vozflow (guía: ``docs/diseno/referencia-openwhispr.md``).
+"""Componentes propios del aspecto de vozflow.
 
 Los que se dibujan solos (interruptor, teclas) consultan ``paleta_actual()`` al pintarse, así
 siguen al tema aunque cambie con la ventana abierta.

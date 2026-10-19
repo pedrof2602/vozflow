@@ -33,8 +33,6 @@ pruebas (`pytest`). **Tiene que quedar en verde antes de proponer un cambio.**
 - **La prueba primero.** Escribí la prueba, mirala **fallar** por la razón correcta y recién
   después escribí el código. No se modifica una prueba para que pase, ni se la saltea.
 - **Cambios chicos y enfocados**: una idea por propuesta.
-- **Las especificaciones** (`specs/`) describen qué se construye y por qué. Si tu cambio las toca,
-  hacelo en un commit aparte y explicá el motivo.
 - **Commits** en español, en una línea que diga qué cambió.
 
 ## Lo que nunca se sube
@@ -49,7 +47,7 @@ Antes de proponer un cambio podés revisar el repositorio con
 ## Probar en tu computadora
 
 Lo que depende del escritorio (atajos, pegado, ventana activa) no se puede probar solo con
-`scripts/ci.sh`. Las guías para probarlo a mano están en `docs/validacion/`.
+`scripts/ci.sh`. Probalo a mano en tu escritorio y contá en la propuesta qué probaste.
 
 ## Reportar un fallo o proponer algo
 

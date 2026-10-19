@@ -10,7 +10,7 @@ from vozflow import rutas
 
 
 def guardar(nombre: str, datos: dict[str, Any]) -> Path:
-    """Guarda el resultado fuera del repositorio, para pegarlo en docs/validacion."""
+    """Guarda el resultado fuera del repositorio, para pegarlo en la propuesta de cambio."""
     carpeta = rutas.asegurar(rutas.directorio_pruebas())
     destino = carpeta / f"{nombre}.json"
     datos = {"fecha": datetime.now().isoformat(timespec="seconds"), **datos}

@@ -1,4 +1,4 @@
-"""El tema visual de vozflow: el aspecto de OpenWhispr (``docs/diseno/referencia-openwhispr.md``).
+"""El tema visual de vozflow: el aspecto de OpenWhispr.
 
 Dos paletas, oscura y clara, con los mismos roles; la hoja de estilos de Qt se arma a partir de
 una paleta. Sin Qt: se prueba el contraste y el contenido sin abrir ventanas.
