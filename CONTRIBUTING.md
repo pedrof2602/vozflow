@@ -5,8 +5,6 @@
 ## Antes de empezar
 
 - Todo va **en español**: código, comentarios, mensajes, documentación y commits.
-- vozflow es para gente que **no es técnica**: los textos que ve la persona no llevan jerga ni siglas
-  sin explicar.
 - Mirá las incidencias abiertas antes de empezar algo grande, así no repetimos trabajo.
 
 ## Preparar el proyecto
