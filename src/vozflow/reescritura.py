@@ -118,6 +118,9 @@ class ReescrituraDeBase:
 
     @staticmethod
     def _sin_cambios(texto: str, motivo: str, *, traduciendo: bool) -> ResultadoReescritura:
+        _registro.warning(
+            "El asistente de IA no pudo %s: %s", "traducir" if traduciendo else "mejorar", motivo
+        )
         if traduciendo:
             return ResultadoReescritura(
                 texto,

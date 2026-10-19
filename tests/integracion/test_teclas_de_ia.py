@@ -240,3 +240,22 @@ def test_cada_tecla_marca_su_intencion(crear, accion, esperada) -> None:  # type
         m.escucha.pulsar(accion)
         m.escucha.soltar(accion)
     assert _esperar(lambda: m.app.estado in (E.INACTIVO, E.ERROR))
+
+
+# ---- si falla, el motivo queda en el registro para poder diagnosticarlo ------------------------------------------
+
+
+def test_el_motivo_de_un_fallo_de_la_ia_queda_en_el_registro_sin_la_clave(  # type: ignore[no-untyped-def]
+    crear, caplog
+) -> None:
+    import logging
+
+    e = crear(reescritor=ReescritorFalso(fallo="OpenRouter no respondió a tiempo"))
+    e.encender(en_el_modo=False)
+
+    with caplog.at_level(logging.WARNING):
+        _dictar(e, MEJORAR)
+
+    registros = [r.getMessage() for r in caplog.records]
+    assert any("OpenRouter no respondió a tiempo" in m for m in registros)
+    assert not any("clave-de-prueba" in m for m in registros)
