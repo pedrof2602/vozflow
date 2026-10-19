@@ -54,7 +54,9 @@ ARCHIVOS_SENSIBLES = (".env", ".env.*", "*.pem", "id_rsa", "id_ed25519", "*.p12"
 ARCHIVOS_DE_EJEMPLO = (".env.example", ".env.sample", ".env.template", ".env.dist")
 
 CORREO = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
-DOMINIOS_SIN_DATOS = {"example.com", "example.org", "example.net", "users.noreply.github.com"}
+DOMINIOS_SIN_DATOS = {
+    "example.com", "example.org", "example.net", "ejemplo.com", "users.noreply.github.com",
+}  # fmt: skip
 IDS_DE_EXTENSIONES_DE_GNOME = {"appindicatorsupport@rgcjonas.gmail.com"}
 """Parecen correos pero son el identificador de una extensión de GNOME (no son de una persona)."""
 RUTA_PERSONAL = re.compile(r"/(?:home|Users)/([A-Za-z0-9._-]+)")
@@ -322,7 +324,11 @@ def _revisar_carpeta_de_trabajo(
 
 
 def _linea(h: Hallazgo) -> str:
-    donde = f"`{h.ruta}`" + (f" (commit {h.commit})" if h.commit else " (sin confirmar todavía)")
+    donde = f"`{h.ruta}`"
+    if h.commit:
+        donde += f" (commit {h.commit})"
+    elif h.ruta != "commits":
+        donde += " (sin confirmar todavía)"
     extra = ""
     if not h.en_version_actual:
         extra = (

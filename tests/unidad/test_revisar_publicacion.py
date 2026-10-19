@@ -452,3 +452,19 @@ def test_el_id_de_una_extension_de_gnome_no_es_un_correo_personal(repo: Repo) ->
     repo.confirmar("extension")
 
     assert _revisar(repo).pendientes() == []
+
+
+def test_un_correo_de_ejemplo_en_espanol_no_se_marca(repo: Repo) -> None:
+    repo.archivo("docs/x.md", "tu-correo@ejemplo.com\n")
+    repo.confirmar("x")
+
+    assert _revisar(repo).pendientes() == []
+
+
+def test_el_hallazgo_de_los_autores_no_dice_sin_confirmar(repo: Repo) -> None:
+    repo.archivo("a.txt", "a\n")
+    repo.confirmar("personal", correo="marta@gmail.com")
+
+    salida = _correr(repo).stdout
+
+    assert "`commits`:" in salida and "sin confirmar" not in salida
