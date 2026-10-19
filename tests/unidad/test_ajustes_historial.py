@@ -132,12 +132,14 @@ def test_vuelve_a_insertar_el_dictado_elegido_y_lo_marca_insertado(qtbot: QtBot)
 
 def test_si_la_reinsercion_falla_lo_avisa(qtbot: QtBot) -> None:
     pagina, _, _, insertor, _ = _pagina(qtbot)
-    insertor.resultado = ResultadoInsercion.fallido("sin ventana")
+    insertor.resultado = ResultadoInsercion.fallido("sin ventana", "pegado_fallo")
     pagina.lista.setCurrentRow(1)
 
     pagina.reinsertar()
 
-    assert pagina.hay_error is True and "sin ventana" in pagina.mensaje
+    # 002 (RP-022): el aviso es el del catálogo, no el detalle técnico.
+    assert pagina.hay_error is True and "No pude pegar el texto" in pagina.mensaje
+    assert "sin ventana" not in pagina.mensaje
 
 
 def test_la_reinsercion_da_tiempo_para_que_la_ventana_de_ajustes_suelte_el_foco(
@@ -183,3 +185,87 @@ def test_con_el_historial_apagado_lo_avisa(qtbot: QtBot) -> None:
     pagina, *_ = _pagina(qtbot, activo=False)
 
     assert "apagado" in pagina.aviso_apagado.text().lower()
+
+
+# ---- el motivo del fallo, en palabras llanas (002, RP-022, RP-023) ------------------------------------------
+
+
+def _pagina_con_fallo(qtbot: QtBot, motivo: str):  # type: ignore[no-untyped-def]
+    base = abrir_base(":memory:")
+    historial = HistorialRepo(base)
+    historial.guardar(
+        texto_crudo="comprar pan", texto_final="Comprar pan.", duracion_audio_ms=1000,
+        duracion_proceso_ms=500, estado="no_insertado", motivo=motivo, creado_en=AHORA,
+    )  # fmt: skip
+    historial.guardar(
+        texto_crudo="todo bien", texto_final="Todo bien.", duracion_audio_ms=1000,
+        duracion_proceso_ms=500, estado="insertado", creado_en=AHORA + timedelta(minutes=1),
+    )  # fmt: skip
+    insertor = Insertor()
+    pagina = PaginaHistorial(historial, Portapapeles(), insertor, al_reinsertar=lambda a: a())
+    qtbot.addWidget(pagina)
+    return pagina, insertor
+
+
+def test_un_dictado_no_insertado_muestra_que_paso_y_que_hacer(qtbot: QtBot) -> None:
+    from vozflow.mensajes import explicar
+
+    pagina, _ = _pagina_con_fallo(qtbot, "pegado_fallo")
+
+    pagina.lista.setCurrentRow(1)  # el más viejo: el no insertado
+
+    texto = pagina.explicacion.text()
+    assert explicar("pegado_fallo").que_paso in texto
+    assert explicar("pegado_fallo").que_hacer in texto
+    assert pagina.explicacion.isHidden() is False
+
+
+def test_un_dictado_anterior_sin_motivo_muestra_el_mensaje_generico(qtbot: QtBot) -> None:
+    from vozflow.mensajes import explicar
+
+    pagina, _ = _pagina_con_fallo(qtbot, "")
+
+    pagina.lista.setCurrentRow(1)
+
+    assert explicar("generico").que_paso in pagina.explicacion.text()
+
+
+def test_un_dictado_insertado_no_muestra_explicacion(qtbot: QtBot) -> None:
+    pagina, _ = _pagina_con_fallo(qtbot, "pegado_fallo")
+
+    pagina.lista.setCurrentRow(0)  # el más nuevo: insertado
+
+    assert pagina.explicacion.isHidden() is True
+
+
+def test_al_cambiar_de_fila_la_explicacion_sigue_a_la_fila(qtbot: QtBot) -> None:
+    pagina, _ = _pagina_con_fallo(qtbot, "pegado_fallo")
+    pagina.lista.setCurrentRow(1)
+
+    pagina.lista.setCurrentRow(0)
+
+    assert pagina.explicacion.isHidden() is True
+
+
+def test_el_texto_se_puede_copiar_a_un_clic_desde_el_fallo(qtbot: QtBot) -> None:
+    pagina, _ = _pagina_con_fallo(qtbot, "pegado_fallo")
+    pagina.lista.setCurrentRow(1)
+
+    pagina.boton_copiar.click()
+
+    assert pagina._portapapeles.copiado == ["Comprar pan."]
+    assert pagina.boton_copiar.isVisibleTo(pagina) is True
+
+
+def test_si_al_reinsertar_falla_el_aviso_es_el_del_catalogo(qtbot: QtBot) -> None:
+    from vozflow.mensajes import explicar
+
+    pagina, insertor = _pagina_con_fallo(qtbot, "pegado_fallo")
+    insertor.resultado = ResultadoInsercion.fallido("detalle técnico", "pegado_fallo")
+    pagina.lista.setCurrentRow(1)
+
+    pagina.reinsertar()
+
+    assert pagina.hay_error is True
+    assert explicar("pegado_fallo").que_paso in pagina.mensaje
+    assert "detalle técnico" not in pagina.mensaje

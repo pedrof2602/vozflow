@@ -237,3 +237,45 @@ def test_nunca_se_manda_enter_con_ningun_texto(texto: str) -> None:
 
     for combinacion in (*primero.combinaciones, *segundo.combinaciones):
         assert RETURN not in combinacion and KP_ENTER not in combinacion
+
+
+# ---- código del motivo para el historial (002, RP-021, RP-022) --------------------------------------------
+
+
+def test_si_fallan_todos_los_tecladores_el_codigo_es_pegado_fallo() -> None:
+    insertor, *_ = _montar(primero_falla=True, segundo_falla=True)
+
+    assert insertor.insertar("hola", Destino()).codigo == "pegado_fallo"
+
+
+def test_sin_tecladores_el_codigo_es_pegado_fallo() -> None:
+    insertor = InsertorPorTeclas(PortapapelesFalso(), [], dormir=lambda _: None)
+
+    assert insertor.insertar("hola", Destino()).codigo == "pegado_fallo"
+
+
+def test_si_no_se_puede_copiar_el_codigo_es_sin_portapapeles() -> None:
+    insertor, portapapeles, *_ = _montar()
+    portapapeles.fallar_al_copiar = True
+
+    assert insertor.insertar("hola", Destino()).codigo == "sin_portapapeles"
+
+
+def test_un_pegado_exitoso_no_lleva_codigo() -> None:
+    insertor, *_ = _montar()
+
+    assert insertor.insertar("hola", Destino()).codigo == ""
+
+
+def test_el_codigo_nunca_lleva_texto_libre() -> None:
+    from vozflow.mensajes import CODIGOS
+
+    insertor, *_ = _montar(primero_falla=True, segundo_falla=True)
+
+    assert insertor.insertar("texto privado", Destino()).codigo in CODIGOS
+
+
+def test_un_fallido_sin_codigo_explicito_usa_el_generico() -> None:
+    from vozflow.insercion.puerto import ResultadoInsercion
+
+    assert ResultadoInsercion.fallido("algo raro").codigo == "generico"

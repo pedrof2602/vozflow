@@ -39,7 +39,9 @@ class InsertorPorTeclas:
         except OSError as error:
             # El texto puede haber quedado a medias en el portapapeles: se devuelve el anterior.
             self._restaurar(previo)
-            return ResultadoInsercion.fallido(f"No se pudo copiar el texto: {error}")
+            return ResultadoInsercion.fallido(
+                f"No se pudo copiar el texto: {error}", "sin_portapapeles"
+            )
         try:
             return self._pegar(estrategia.teclas)
         finally:
@@ -61,8 +63,10 @@ class InsertorPorTeclas:
             else:
                 return ResultadoInsercion.exito()
         if not motivos:
-            return ResultadoInsercion.fallido("No hay ninguna forma de pegar configurada")
-        return ResultadoInsercion.fallido("No se pudo pegar: " + "; ".join(motivos))
+            return ResultadoInsercion.fallido(
+                "No hay ninguna forma de pegar configurada", "pegado_fallo"
+            )
+        return ResultadoInsercion.fallido("No se pudo pegar: " + "; ".join(motivos), "pegado_fallo")
 
     def _leer_previo(self) -> str | None:
         try:

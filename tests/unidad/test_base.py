@@ -26,8 +26,8 @@ def _tablas(base: sqlite3.Connection) -> set[str]:
 def test_crea_el_esquema_de_la_version_1(tmp_path: Path) -> None:
     base = abrir_base(tmp_path / "vozflow.db")
 
-    assert VERSION_DEL_ESQUEMA == 1
-    assert base.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert VERSION_DEL_ESQUEMA == 2
+    assert base.execute("PRAGMA user_version").fetchone()[0] == 2
     assert _tablas(base) >= TABLAS
 
 
@@ -53,7 +53,7 @@ def test_abrirla_dos_veces_no_duplica_nada(tmp_path: Path) -> None:
     segunda = abrir_base(ruta)
 
     assert segunda.execute("SELECT COUNT(*) FROM modo").fetchone()[0] == 5
-    assert segunda.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert segunda.execute("PRAGMA user_version").fetchone()[0] == 2
 
 
 def test_rechaza_una_base_de_una_version_mas_nueva(tmp_path: Path) -> None:

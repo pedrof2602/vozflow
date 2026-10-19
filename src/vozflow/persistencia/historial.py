@@ -8,12 +8,13 @@ from typing import Protocol
 
 from vozflow.dominio.historial import ESTADOS_DEL_HISTORIAL, Dictado, EstadoDelHistorial
 from vozflow.insercion.puerto import Destino, Insertor, ResultadoInsercion
+from vozflow.mensajes import CODIGOS
 from vozflow.persistencia.errores import DatoInvalido
 
 _FORMATO = "%Y-%m-%dT%H:%M:%S.%fZ"
 _COLUMNAS = (
     "id, creado_en, texto_crudo, texto_final, idioma, duracion_audio_ms, duracion_proceso_ms, "
-    "aplicacion, modo_id, reescrito, proveedor, estado"
+    "aplicacion, modo_id, reescrito, proveedor, estado, motivo"
 )
 
 
@@ -35,6 +36,7 @@ def _dictado(fila: sqlite3.Row) -> Dictado:
         reescrito=bool(fila["reescrito"]),
         proveedor=fila["proveedor"],
         estado=fila["estado"],
+        motivo=fila["motivo"],
     )
 
 
@@ -65,6 +67,7 @@ class HistorialRepo:
         modo_id: int | None = None,
         reescrito: bool = False,
         proveedor: str = "",
+        motivo: str = "",
         creado_en: datetime | None = None,
     ) -> Dictado | None:
         """Guarda un dictado. Con el historial apagado no escribe nada y devuelve ``None``."""
@@ -72,6 +75,8 @@ class HistorialRepo:
             raise DatoInvalido("El estado del dictado no es válido")
         if duracion_audio_ms <= 0:
             raise DatoInvalido("La duración del audio tiene que ser mayor que cero")
+        if motivo and motivo not in CODIGOS:
+            raise DatoInvalido("El motivo del fallo no es uno de los conocidos")
         if duracion_proceso_ms < 0:
             raise DatoInvalido("La duración del proceso no puede ser negativa")
         if not self._activo():
@@ -81,7 +86,7 @@ class HistorialRepo:
             cursor = self._base.execute(
                 "INSERT INTO dictado (creado_en, texto_crudo, texto_final, idioma, "
                 "duracion_audio_ms, duracion_proceso_ms, aplicacion, modo_id, reescrito, "
-                "proveedor, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "proveedor, estado, motivo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     momento,
                     texto_crudo,
@@ -94,6 +99,7 @@ class HistorialRepo:
                     int(reescrito),
                     proveedor,
                     estado,
+                    motivo,
                 ),
             )
         guardado = self.obtener(int(cursor.lastrowid or 0))
@@ -143,7 +149,9 @@ class HistorialRepo:
         resultado = insertor.insertar(dictado.texto_final, destino)
         if resultado.insertado:
             with self._base:
-                self._base.execute("UPDATE dictado SET estado = 'insertado' WHERE id = ?", (id_,))
+                self._base.execute(
+                    "UPDATE dictado SET estado = 'insertado', motivo = '' WHERE id = ?", (id_,)
+                )
         return resultado
 
     def borrar(self, id_: int) -> bool:

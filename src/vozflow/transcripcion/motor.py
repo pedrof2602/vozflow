@@ -19,7 +19,14 @@ __all__ = [
 
 
 class ErrorDeTranscripcion(Exception):
-    """El motor no pudo transcribir; el mensaje se puede mostrar tal cual."""
+    """El motor no pudo transcribir; el mensaje es técnico (para el registro).
+
+    ``codigo`` es el del catálogo de ``vozflow.mensajes``, lo que ve la persona.
+    """
+
+    def __init__(self, mensaje: str, codigo: str = "generico") -> None:
+        super().__init__(mensaje)
+        self.codigo = codigo
 
 
 @dataclass(frozen=True)

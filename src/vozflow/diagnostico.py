@@ -1,11 +1,15 @@
 """Diagnóstico del escritorio: qué hay disponible para los atajos y la inserción de texto."""
 
 import glob
+import importlib.metadata
 import os
+import platform
+import re
 import shutil
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any, Protocol
 
 _PORTALES = {
     "GlobalShortcuts": "org.freedesktop.portal.GlobalShortcuts",
@@ -127,3 +131,173 @@ def _ventana(sondas: Sondas) -> Comprobacion:
 
 def formatear(resultado: list[Comprobacion]) -> str:
     return "\n".join(f"{'✓' if c.ok else '✗'} {c.nombre}: {c.detalle}" for c in resultado)
+
+
+# ---- diagnóstico copiable para un reporte (002, RP-024) ----------------------------------------
+
+
+@dataclass(frozen=True)
+class DatosCopiables:
+    """Solo lo que es seguro pegar en un reporte público: versiones y si algo funciona.
+
+    A propósito no hay campos para texto dictado, ventanas, claves ni nombres de dispositivos.
+    """
+
+    version_de_vozflow: str
+    version_de_python: str
+    sistema: str
+    gnome: str
+    sesion: str
+    puede_leer_teclados: bool
+    puede_escribir_uinput: bool
+    tiene_portapapeles: bool
+    microfonos: int
+    modelo: str | None
+    historial_activo: bool
+    reescritura_activa: bool
+
+
+class EntornoCopiable(Protocol):
+    """Lo que toca el sistema; las pruebas lo reemplazan."""
+
+    def os_release(self) -> str: ...
+    def gnome(self) -> str: ...
+    def sesion(self) -> str: ...
+    def nombres_de_microfonos(self) -> list[str]: ...
+    def modelo_instalado(self) -> str | None: ...
+    def historial_activo(self) -> bool: ...
+    def reescritura_activa(self) -> bool: ...
+    def puede_leer_teclados(self) -> bool: ...
+    def puede_escribir_uinput(self) -> bool: ...
+    def tiene_portapapeles(self) -> bool: ...
+
+
+_DESCONOCIDO = "desconocido"
+
+
+def _o(valor: Callable[[], Any], defecto: Any) -> Any:
+    try:
+        return valor()
+    except Exception:
+        return defecto
+
+
+def _nombre_del_sistema(os_release: str) -> str:
+    for linea in os_release.splitlines():
+        if linea.startswith("PRETTY_NAME="):
+            return linea.split("=", 1)[1].strip().strip('"') or _DESCONOCIDO
+    return _DESCONOCIDO
+
+
+def reunir_datos_copiables(entorno: EntornoCopiable) -> DatosCopiables:
+    """Junta los datos; lo que no se pueda leer queda como «desconocido», nunca falla."""
+    return DatosCopiables(
+        version_de_vozflow=_o(lambda: importlib.metadata.version("vozflow"), _DESCONOCIDO),
+        version_de_python=platform.python_version(),
+        sistema=_nombre_del_sistema(_o(entorno.os_release, "")),
+        gnome=_o(entorno.gnome, _DESCONOCIDO) or _DESCONOCIDO,
+        sesion=_o(entorno.sesion, _DESCONOCIDO) or _DESCONOCIDO,
+        puede_leer_teclados=bool(_o(entorno.puede_leer_teclados, False)),
+        puede_escribir_uinput=bool(_o(entorno.puede_escribir_uinput, False)),
+        tiene_portapapeles=bool(_o(entorno.tiene_portapapeles, False)),
+        microfonos=len(
+            _o(entorno.nombres_de_microfonos, [])
+        ),  # solo la cantidad, nunca los nombres
+        modelo=_o(entorno.modelo_instalado, None),
+        historial_activo=bool(_o(entorno.historial_activo, False)),
+        reescritura_activa=bool(_o(entorno.reescritura_activa, False)),
+    )
+
+
+def _estado(ok: bool) -> str:
+    return "bien" if ok else "falta"
+
+
+def _microfonos(cantidad: int) -> str:
+    if cantidad == 0:
+        return "ninguno"
+    return f"{cantidad} dispositivo" + ("" if cantidad == 1 else "s")
+
+
+def _anonimizar(texto: str, hogar: str, usuario: str) -> str:
+    if hogar:
+        texto = texto.replace(hogar, "~")
+    if len(usuario) >= 3:
+        texto = re.sub(rf"\b{re.escape(usuario)}\b", "usuario", texto, flags=re.IGNORECASE)
+    return texto
+
+
+def formatear_copiable(datos: DatosCopiables, hogar: str = "", usuario: str = "") -> str:
+    """El Markdown de ``contracts/diagnostico.md``, con el hogar y el usuario ocultos."""
+    texto = "\n".join(
+        [
+            f"**vozflow** {datos.version_de_vozflow} · **Python** {datos.version_de_python} · "
+            f"**Sistema** {datos.sistema} · **GNOME** {datos.gnome} · **Sesión** {datos.sesion}",
+            "",
+            "| Permiso | Estado |",
+            "|---|---|",
+            f"| Leer el teclado | {_estado(datos.puede_leer_teclados)} |",
+            f"| Teclado virtual | {_estado(datos.puede_escribir_uinput)} |",
+            f"| Copiar y pegar | {_estado(datos.tiene_portapapeles)} |",
+            f"| Micrófono | {_microfonos(datos.microfonos)} |",
+            "",
+            "Modelo de voz: "
+            + (f"instalado ({datos.modelo})" if datos.modelo else "sin descargar")
+            + " · Historial: "
+            + ("activado" if datos.historial_activo else "apagado")
+            + " · Reescritura: "
+            + ("activada" if datos.reescritura_activa else "apagada"),
+            "",
+        ]
+    )
+    return _anonimizar(texto, hogar, usuario)
+
+
+class EntornoReal:
+    """El entorno de verdad: sondas del escritorio y los ajustes guardados."""
+
+    def __init__(self, sondas: Sondas, ajustes: Any) -> None:
+        self._sondas = sondas
+        self._ajustes = ajustes
+
+    def os_release(self) -> str:
+        with open("/etc/os-release", encoding="utf-8") as archivo:
+            return archivo.read()
+
+    def gnome(self) -> str:
+        import subprocess
+
+        salida = subprocess.run(
+            ["gnome-shell", "--version"], capture_output=True, text=True, timeout=3, check=True
+        ).stdout
+        encontrado = re.search(r"\d+(?:\.\d+)*", salida)
+        return encontrado.group(0) if encontrado else _DESCONOCIDO
+
+    def sesion(self) -> str:
+        return os.environ.get("XDG_SESSION_TYPE", "")
+
+    def nombres_de_microfonos(self) -> list[str]:
+        from vozflow.audio.captura import listar_dispositivos
+
+        return [d.nombre for d in listar_dispositivos()]
+
+    def modelo_instalado(self) -> str | None:
+        from vozflow.transcripcion.faster_whisper import modelo_disponible
+
+        nombre = str(self._ajustes.obtener("motor.modelo"))
+        return nombre if modelo_disponible(nombre) else None
+
+    def historial_activo(self) -> bool:
+        return bool(self._ajustes.obtener("historial.activo"))
+
+    def reescritura_activa(self) -> bool:
+        return bool(self._ajustes.obtener("reescritura.activa"))
+
+    def puede_leer_teclados(self) -> bool:
+        return self._sondas.puede_leer_teclados()
+
+    def puede_escribir_uinput(self) -> bool:
+        return self._sondas.puede_escribir_uinput()
+
+    def tiene_portapapeles(self) -> bool:
+        return self._sondas.programa_instalado("wl-copy")

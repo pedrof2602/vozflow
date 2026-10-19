@@ -112,7 +112,11 @@ INSERT INTO modo (nombre, salto_de_linea) VALUES ('Mensajería', 'espacio');
 INSERT INTO modo (nombre) VALUES ('Documentos');
 """
 
-_MIGRACIONES = {1: _ESQUEMA_1}
+# Versión 2: por qué un dictado no llegó a insertarse (un código estable del catálogo de mensajes,
+# nunca texto libre). Los dictados anteriores quedan con '' y se muestran con el mensaje genérico.
+_ESQUEMA_2 = "ALTER TABLE dictado ADD COLUMN motivo TEXT NOT NULL DEFAULT '';"
+
+_MIGRACIONES = {1: _ESQUEMA_1, 2: _ESQUEMA_2}
 VERSION_DEL_ESQUEMA = max(_MIGRACIONES)
 
 

@@ -332,3 +332,52 @@ def test_si_se_borra_el_modo_el_dictado_queda_sin_modo(
 
     sobrevive = historial.obtener(dictado.id)
     assert sobrevive is not None and sobrevive.modo_id is None
+
+
+# ---- motivo del fallo (002, RP-021) ------------------------------------------------------------------------
+
+
+def test_guarda_y_devuelve_el_motivo_del_fallo(historial: HistorialRepo) -> None:
+    guardado = _guardar(historial, estado="no_insertado", motivo="pegado_fallo")
+
+    assert guardado is not None and guardado.motivo == "pegado_fallo"
+    assert historial.obtener(guardado.id) == guardado
+
+
+def test_sin_motivo_queda_vacio(historial: HistorialRepo) -> None:
+    guardado = _guardar(historial)
+
+    assert guardado is not None and guardado.motivo == ""
+
+
+def test_el_listado_y_la_busqueda_traen_el_motivo(historial: HistorialRepo) -> None:
+    _guardar(historial, "pegado roto", estado="no_insertado", motivo="pegado_fallo")
+
+    assert historial.listar()[0].motivo == "pegado_fallo"
+    assert historial.buscar("pegado")[0].motivo == "pegado_fallo"
+
+
+def test_un_codigo_que_no_es_del_catalogo_se_rechaza(historial: HistorialRepo) -> None:
+    with pytest.raises(DatoInvalido, match="motivo"):
+        _guardar(historial, estado="no_insertado", motivo="texto libre con datos de alguien")
+
+
+def test_cada_codigo_del_catalogo_es_valido(historial: HistorialRepo) -> None:
+    from vozflow.mensajes import CODIGOS
+
+    for codigo in CODIGOS:
+        assert _guardar(historial, estado="no_insertado", motivo=codigo) is not None
+
+
+def test_reinsertar_con_exito_limpia_el_motivo(historial: HistorialRepo) -> None:
+    class Insertor:
+        def insertar(self, texto: str, destino: Destino) -> ResultadoInsercion:
+            return ResultadoInsercion.exito()
+
+    guardado = _guardar(historial, estado="no_insertado", motivo="pegado_fallo")
+    assert guardado is not None
+
+    historial.reinsertar(guardado.id, Insertor(), Destino())
+
+    recuperado = historial.obtener(guardado.id)
+    assert recuperado is not None and recuperado.estado == "insertado" and recuperado.motivo == ""

@@ -89,7 +89,14 @@ def normalizar(muestras: npt.NDArray[np.generic]) -> Audio:
 
 
 class ErrorDeAudio(Exception):
-    """El micrófono no se pudo abrir o arrancar; el mensaje se puede mostrar tal cual."""
+    """El micrófono no se pudo abrir o arrancar; el mensaje es técnico (para el registro).
+
+    ``codigo`` es el del catálogo de ``vozflow.mensajes``, lo que ve la persona.
+    """
+
+    def __init__(self, mensaje: str, codigo: str = "microfono_ocupado") -> None:
+        super().__init__(mensaje)
+        self.codigo = codigo
 
 
 @dataclass(frozen=True)
@@ -105,7 +112,8 @@ def _importar_sounddevice() -> Any:
         import sounddevice
     except OSError as error:  # falta la biblioteca PortAudio del sistema
         raise ErrorDeAudio(
-            f"No se pudo cargar PortAudio, necesario para usar el micrófono: {error}"
+            f"No se pudo cargar PortAudio, necesario para usar el micrófono: {error}",
+            "generico",
         ) from error
     return sounddevice
 
@@ -199,7 +207,9 @@ class Capturador:
             self._activo = False
             if flujo is not None:
                 self._cerrar(flujo)
-            raise ErrorDeAudio(f"No se pudo abrir el micrófono: {error}") from error
+            # Un dispositivo que no existe es «no hay micrófono»; uno que no abre, «está ocupado».
+            codigo = "sin_microfono" if isinstance(error, ValueError) else "microfono_ocupado"
+            raise ErrorDeAudio(f"No se pudo abrir el micrófono: {error}", codigo) from error
         self._flujo = flujo
 
     def audio_acumulado(self) -> npt.NDArray[np.int16]:

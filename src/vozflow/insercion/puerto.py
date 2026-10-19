@@ -26,14 +26,16 @@ class Destino:
 class ResultadoInsercion:
     insertado: bool
     motivo: str | None = None
+    codigo: str = ""
+    """Código del catálogo de mensajes; el ``motivo`` es técnico, para el registro."""
 
     @classmethod
     def exito(cls) -> ResultadoInsercion:
         return cls(True)
 
     @classmethod
-    def fallido(cls, motivo: str) -> ResultadoInsercion:
-        return cls(False, motivo)
+    def fallido(cls, motivo: str, codigo: str = "generico") -> ResultadoInsercion:
+        return cls(False, motivo, codigo)
 
 
 class Insertor(Protocol):

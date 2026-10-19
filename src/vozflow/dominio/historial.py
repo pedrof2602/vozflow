@@ -22,3 +22,5 @@ class Dictado:
     reescrito: bool
     proveedor: str
     estado: EstadoDelHistorial
+    motivo: str = ""
+    """Código del catálogo de mensajes con la razón de un fallo; vacío si no hubo."""

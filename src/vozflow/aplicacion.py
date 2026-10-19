@@ -27,6 +27,7 @@ from vozflow.dominio.tuberia import (
     procesar,
 )
 from vozflow.insercion.puerto import Insertor
+from vozflow.mensajes import explicar
 from vozflow.reescritura import ResultadoReescritura
 from vozflow.transcripcion.motor import ErrorDeTranscripcion, MotorDeTranscripcion, Transcripcion
 from vozflow.transcripcion.por_tramos import TranscriptorPorTramos
@@ -215,6 +216,7 @@ class RegistroDeDictados(Protocol):
         modo_id: int | None = None,
         reescrito: bool = False,
         proveedor: str = "",
+        motivo: str = "",
     ) -> object: ...
 
 
@@ -452,14 +454,16 @@ class Aplicacion:
         self._evento(Evento.TEXTO_LISTO)
         resultado = self._insertor.insertar(texto, resolucion.destino)
         estado: EstadoDelHistorial = "insertado" if resultado.insertado else "no_insertado"
-        self._guardar(dictado, texto, estado, ventana, resolucion.modo.id, proveedor)
+        motivo = "" if resultado.insertado else resultado.codigo or "generico"
+        self._guardar(dictado, texto, estado, ventana, resolucion.modo.id, proveedor, motivo)
         if resultado.insertado:
             self._evento(Evento.INSERTADO)
             return
         self.texto_sin_insertar = texto
         if self._al_texto_sin_insertar is not None:
             self._al_texto_sin_insertar(texto)
-        self._fallar(resultado.motivo or "No se pudo insertar el texto")
+        _registro.warning("No se pudo insertar el texto: %s", resultado.motivo)
+        self._fallar(_frase(resultado.codigo or "generico"))
 
     def _reescribir(self, texto: str, modo: Modo, traducir_a: str | None) -> ResultadoReescritura:
         if self._reescritura is None:
@@ -479,7 +483,7 @@ class Aplicacion:
         modo_id: int,
     ) -> None:
         """Nada en el idioma equivocado: el texto queda en el historial para recuperarlo."""
-        self._guardar(dictado, texto, "no_insertado", ventana, modo_id)
+        self._guardar(dictado, texto, "no_insertado", ventana, modo_id, "", "traduccion_fallo")
         self.texto_sin_insertar = texto
         if self._al_texto_sin_insertar is not None:
             self._al_texto_sin_insertar(texto)
@@ -492,6 +496,7 @@ class Aplicacion:
         ventana: InfoVentana | None,
         modo_id: int | None,
         proveedor: str = "",
+        motivo: str = "",
     ) -> None:
         """Un fallo del historial nunca debe impedir ni deshacer el dictado."""
         self._guardado = True
@@ -510,6 +515,7 @@ class Aplicacion:
                 modo_id=modo_id,
                 reescrito=bool(proveedor),
                 proveedor=proveedor,
+                motivo=motivo,
             )
         except Exception:
             _registro.exception("No se pudo guardar el dictado en el historial")
@@ -542,8 +548,15 @@ class Aplicacion:
             self._al_cambiar_estado(nuevo)
 
 
+def _frase(codigo: str) -> str:
+    """Lo que ve la persona: qué pasó y qué hacer, del catálogo de mensajes."""
+    explicacion = explicar(codigo)
+    return f"{explicacion.que_paso} {explicacion.que_hacer}"
+
+
 def _mensaje_del_fallo(error: Exception) -> str:
     if isinstance(error, ErrorDeTranscripcion | ErrorDeAudio):
-        return str(error)  # estos mensajes están pensados para mostrarse tal cual
+        _registro.warning("Falló un dictado: %s", error)  # el detalle técnico, al registro
+        return _frase(error.codigo)
     _registro.exception("Falló un dictado")
-    return f"Falló el dictado ({type(error).__name__})"
+    return _frase("generico")

@@ -44,7 +44,9 @@ def descargar_modelo(nombre: str = MODELO_POR_DEFECTO) -> str:
     try:
         return str(download_model(nombre))
     except Exception as error:
-        raise ErrorDeTranscripcion(f"No se pudo descargar el modelo '{nombre}': {error}") from error
+        raise ErrorDeTranscripcion(
+            f"No se pudo descargar el modelo '{nombre}': {error}", "modelo_faltante"
+        ) from error
 
 
 @dataclass(frozen=True)
@@ -86,7 +88,8 @@ class MotorFasterWhisper:
         if ruta is None:
             raise ErrorDeTranscripcion(
                 f"El modelo '{self._nombre}' no está descargado. "
-                "Descargalo una vez con: uv run python -m vozflow descargar-modelo"
+                "Descargalo una vez con: uv run python -m vozflow descargar-modelo",
+                "modelo_faltante",
             )
         from faster_whisper import WhisperModel
 

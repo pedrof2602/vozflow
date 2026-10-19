@@ -131,12 +131,13 @@ def test_si_no_se_pudo_insertar_lo_avisa_y_muestra_el_texto_para_no_perderlo(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     m = Montaje(cierre=_dictar)
-    m.insertor.resultado = ResultadoInsercion.fallido("No se pudo pegar")
+    m.insertor.resultado = ResultadoInsercion.fallido("No se pudo pegar", "pegado_fallo")
 
     m.correr()
 
     err = capsys.readouterr().err
-    assert "No se pudo pegar" in err and "contraseña" in err
+    # 002 (RP-022): el aviso es el del catálogo, en palabras llanas.
+    assert "No pude pegar el texto" in err and "contraseña" in err
 
 
 def test_un_atajo_ocupado_termina_con_un_mensaje_claro(
@@ -189,6 +190,44 @@ def test_el_subcomando_diagnostico_imprime_el_informe(
     codigo = Montaje().correr("diagnostico")
 
     assert codigo == CODIGO_OK and "✓ Algo: bien" in capsys.readouterr().out
+
+
+def test_diagnostico_copiable_imprime_el_markdown_sin_nada_personal(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from pathlib import Path
+
+    from vozflow import __main__ as principal
+    from vozflow.diagnostico import DatosCopiables
+
+    hogar = str(Path.home())
+    datos = DatosCopiables(
+        "0.1.0", "3.14.8", f"Fedora en {hogar}/mi/carpeta", "50", "wayland",
+        True, True, True, 2, "small", True, False,
+    )  # fmt: skip
+    monkeypatch.setattr(principal, "_datos_copiables", lambda: datos)
+
+    codigo = Montaje().correr("diagnostico", "--copiable")
+
+    salida = capsys.readouterr().out
+    assert codigo == CODIGO_OK
+    assert "**vozflow** 0.1.0" in salida and "| Micrófono | 2 dispositivos |" in salida
+    assert hogar not in salida and "~/mi/carpeta" in salida
+
+
+def test_diagnostico_sin_la_opcion_mantiene_la_salida_tecnica(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from vozflow import __main__ as principal
+    from vozflow.diagnostico import Comprobacion
+
+    monkeypatch.setattr(
+        principal, "_hacer_diagnostico", lambda: [Comprobacion("Algo", True, "bien")]
+    )
+
+    Montaje().correr("diagnostico")
+
+    assert "✓ Algo: bien" in capsys.readouterr().out
 
 
 # ---- los ajustes, el diccionario y el historial salen de la base ----------------------------------------------

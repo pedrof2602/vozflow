@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from vozflow.dominio.historial import Dictado
 from vozflow.insercion.puerto import Destino, Insertor
+from vozflow.mensajes import explicar
 from vozflow.persistencia.historial import HistorialRepo
 from vozflow.ui.ajustes.base import PaginaBase
 
@@ -53,6 +54,7 @@ class PaginaHistorial(PaginaBase):
         self._al_reinsertar = al_reinsertar
         self._destino = destino or Destino()
         self._ids: list[int] = []
+        self._dictados: dict[int, Dictado] = {}
         self.aviso_apagado = QLabel()
         self.campo_busqueda = QLineEdit()
         self.campo_busqueda.setPlaceholderText("Buscar en lo dictado…")
@@ -61,20 +63,25 @@ class PaginaHistorial(PaginaBase):
         self.lista.currentRowChanged.connect(self._al_elegir)
         self.vista = QPlainTextEdit()
         self.vista.setReadOnly(True)
+        self.explicacion = QLabel()
+        self.explicacion.setWordWrap(True)
+        self.explicacion.setProperty("error", True)
+        self.explicacion.hide()
         botones = QHBoxLayout()
-        for texto, accion in (
-            ("Copiar", self.copiar),
-            ("Volver a insertar", self.reinsertar),
-            ("Borrar", self.borrar),
-            ("Borrar todo", self._confirmar_y_borrar_todo),
+        self.boton_copiar = QPushButton("Copiar")
+        for boton, accion in (
+            (self.boton_copiar, self.copiar),
+            (QPushButton("Volver a insertar"), self.reinsertar),
+            (QPushButton("Borrar"), self.borrar),
+            (QPushButton("Borrar todo"), self._confirmar_y_borrar_todo),
         ):
-            boton = QPushButton(texto)
             boton.clicked.connect(lambda _=False, a=accion: a())
             botones.addWidget(boton)
         columna = QVBoxLayout(self)
         columna.addWidget(self.aviso_apagado)
         columna.addWidget(self.campo_busqueda)
         columna.addWidget(self.lista, 2)
+        columna.addWidget(self.explicacion)
         columna.addWidget(self.vista, 1)
         columna.addLayout(botones)
         columna.addWidget(self._etiqueta_mensaje)
@@ -116,7 +123,8 @@ class PaginaHistorial(PaginaBase):
                 self.buscar()
                 self.avisar("Texto insertado de nuevo.")
             else:
-                self.avisar(resultado.motivo or "No se pudo insertar el texto.", error=True)
+                explicacion = explicar(resultado.codigo or "generico")
+                self.avisar(f"{explicacion.que_paso} {explicacion.que_hacer}", error=True)
 
         # Se inserta en la ventana que tenía el foco antes: quien llama oculta ésta y espera.
         self._al_reinsertar(insertar)
@@ -144,18 +152,25 @@ class PaginaHistorial(PaginaBase):
     def _mostrar(self, dictados: list[Dictado]) -> None:
         self._ids = [d.id for d in dictados]
         self._textos = {d.id: d.texto_final for d in dictados}
+        self._dictados = {d.id: d for d in dictados}
         self.lista.blockSignals(True)
         self.lista.clear()
         for d in dictados:
             self.lista.addItem(_linea(d))
         self.lista.blockSignals(False)
         self.vista.clear()
+        self.explicacion.hide()
 
     def _elegido(self) -> int | None:
         fila = self.lista.currentRow()
         return self._ids[fila] if 0 <= fila < len(self._ids) else None
 
     def _al_elegir(self, fila: int) -> None:
-        self.vista.setPlainText(
-            self._textos.get(self._ids[fila], "") if 0 <= fila < len(self._ids) else ""
-        )
+        dictado = self._dictados.get(self._ids[fila]) if 0 <= fila < len(self._ids) else None
+        self.vista.setPlainText(dictado.texto_final if dictado else "")
+        if dictado is None or dictado.estado == "insertado":
+            self.explicacion.hide()
+            return
+        explicacion = explicar(dictado.motivo or "generico")
+        self.explicacion.setText(f"{explicacion.que_paso} {explicacion.que_hacer}")
+        self.explicacion.show()

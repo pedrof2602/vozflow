@@ -22,7 +22,16 @@ from vozflow.atajos.puerto import AtajoOcupado, EscuchaDeAtajos
 from vozflow.audio.captura import ErrorDeAudio
 from vozflow.autoinicio import activar_autoinicio, autoinicio_activo, desactivar_autoinicio
 from vozflow.configuracion import ConfiguracionDeBase
-from vozflow.diagnostico import Comprobacion, ejecutar_diagnostico, formatear, sondas_reales
+from vozflow.diagnostico import (
+    Comprobacion,
+    DatosCopiables,
+    EntornoReal,
+    ejecutar_diagnostico,
+    formatear,
+    formatear_copiable,
+    reunir_datos_copiables,
+    sondas_reales,
+)
 from vozflow.dominio.copia import CopiaInvalida
 from vozflow.dominio.dictado import EstadoDelDictado
 from vozflow.dominio.tuberia import OpcionesDeTuberia
@@ -203,8 +212,13 @@ def _crear_parser() -> argparse.ArgumentParser:
     )
     autoinicio.add_argument("accion", choices=["activar", "desactivar", "estado"])
 
-    ordenes.add_parser(
+    diagnostico = ordenes.add_parser(
         "diagnostico", help="revisa qué tiene este escritorio para atajos e inserción de texto"
+    )
+    diagnostico.add_argument(
+        "--copiable",
+        action="store_true",
+        help="imprime un resumen para pegar en un reporte, sin nada personal",
     )
     return parser
 
@@ -306,7 +320,19 @@ def _orden_autoinicio(argumentos: argparse.Namespace, dependencias: Dependencias
     return CODIGO_OK
 
 
-def _orden_diagnostico() -> int:
+def _datos_copiables() -> DatosCopiables:
+    base = abrir_base()
+    try:
+        return reunir_datos_copiables(EntornoReal(sondas_reales(), AjustesRepo(base)))
+    finally:
+        base.close()
+
+
+def _orden_diagnostico(argumentos: argparse.Namespace) -> int:
+    if argumentos.copiable:
+        usuario = os.environ.get("USER") or getpass.getuser()
+        print(formatear_copiable(_datos_copiables(), str(Path.home()), usuario), end="")
+        return CODIGO_OK
     print(formatear(_hacer_diagnostico()))
     return CODIGO_OK
 
@@ -394,7 +420,7 @@ def main(
         if argumentos.orden == "descargar-modelo":
             return _orden_descargar_modelo(argumentos, dependencias)
         if argumentos.orden == "diagnostico":
-            return _orden_diagnostico()
+            return _orden_diagnostico(argumentos)
         if argumentos.orden in cli.ORDENES_DE_DATOS:
             return _orden_de_datos(argumentos, dependencias)
         if argumentos.orden == "autoinicio":

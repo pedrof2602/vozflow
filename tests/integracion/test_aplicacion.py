@@ -227,14 +227,16 @@ def test_mientras_transcribe_se_ignora_pulsar() -> None:
 
 
 def test_si_la_insercion_falla_se_avisa_y_se_conserva_el_texto() -> None:
-    montaje = Montaje(resultado=ResultadoInsercion.fallido("No se pudo pegar"))
+    montaje = Montaje(resultado=ResultadoInsercion.fallido("No se pudo pegar", "pegado_fallo"))
     montaje.app.iniciar()
     try:
         _dictar_mantenido(montaje)
 
         assert montaje.app.estado is E.ERROR
         assert montaje.sin_insertar == [procesar("hola mundo", "es").texto]
-        assert montaje.avisos and "No se pudo pegar" in montaje.avisos[0]
+        # 002 (RP-022): el aviso es el del catálogo, en palabras llanas, no el detalle técnico.
+        assert montaje.avisos and "No pude pegar el texto" in montaje.avisos[0]
+        assert "a salvo" in montaje.avisos[0]
         assert montaje.app.texto_sin_insertar == montaje.sin_insertar[0]
     finally:
         montaje.app.detener()
@@ -276,7 +278,7 @@ def test_si_el_motor_falla_se_avisa_sin_incluir_texto_ni_audio() -> None:
     montaje = Montaje()
 
     def roto(audio, pista, idioma) -> Transcripcion:  # type: ignore[no-untyped-def]
-        raise ErrorDeTranscripcion("el modelo no está cargado")
+        raise ErrorDeTranscripcion("el modelo no está cargado", "modelo_faltante")
 
     montaje.motor.transcribir = roto  # type: ignore[method-assign]
     montaje.app.iniciar()
