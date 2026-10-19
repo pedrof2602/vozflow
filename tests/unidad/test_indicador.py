@@ -201,3 +201,89 @@ def test_mientras_transcribe_una_traduccion_sigue_mostrando_el_destino(qtbot: Qt
     indicador.establecer_estado(E.TRANSCRIBIENDO, "francés")
 
     assert "francés" in indicador.texto
+
+
+# ---- píldora con barras de onda (lote 7) ---------------------------------------------------------------------
+
+
+def test_es_una_pildora_con_las_esquinas_del_todo_redondas(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+
+    assert indicador.radio_de_esquina() == indicador.height() / 2
+
+
+def test_las_barras_empiezan_en_reposo(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+    indicador.establecer_estado(E.ESCUCHANDO)
+
+    barras = indicador.barras()
+
+    assert len(barras) == 9 and all(b <= 0.15 for b in barras)
+
+
+def test_las_barras_siguen_el_nivel_de_la_voz(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+    indicador.establecer_estado(E.ESCUCHANDO)
+
+    indicador.establecer_nivel(1.0)
+
+    assert max(indicador.barras()) > 0.8
+
+
+def test_las_barras_se_desplazan_con_el_tiempo(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+    indicador.establecer_estado(E.ESCUCHANDO)
+    indicador.establecer_nivel(1.0)
+    alta = indicador.barras().index(max(indicador.barras()))
+
+    indicador.establecer_nivel(0.0)
+
+    assert (
+        indicador.barras()[alta] <= 0.15
+        or indicador.barras().index(max(indicador.barras())) != alta
+    )
+
+
+def test_las_barras_vuelven_a_reposo_al_empezar_otro_dictado(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+    indicador.establecer_estado(E.ESCUCHANDO)
+    indicador.establecer_nivel(1.0)
+
+    indicador.establecer_estado(E.TRANSCRIBIENDO)
+    indicador.establecer_estado(E.ESCUCHANDO)
+
+    assert all(b <= 0.15 for b in indicador.barras())
+
+
+def test_las_barras_siempre_quedan_entre_0_y_1(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+    indicador.establecer_estado(E.ESCUCHANDO)
+
+    for nivel in (-3.0, 0.4, 7.0, 0.0):
+        indicador.establecer_nivel(nivel)
+
+    assert all(0.0 <= b <= 1.0 for b in indicador.barras())
+
+
+def test_la_pildora_oscura_se_dibuja_con_texto_legible(qtbot: QtBot) -> None:
+    from vozflow.ui.tema import contraste
+
+    indicador = _indicador(qtbot)
+
+    assert contraste(indicador.color_de_fondo(), indicador.color_de_texto()) >= 4.5
+
+
+def test_en_la_pildora_se_ven_las_barras_en_el_color_del_estado(qtbot: QtBot) -> None:
+    indicador = _indicador(qtbot)
+    indicador.establecer_estado(E.ESCUCHANDO)
+    indicador.establecer_nivel(1.0)
+    indicador.show()
+
+    imagen = indicador.grab().toImage()
+    colores = {
+        imagen.pixelColor(x, y).name()
+        for x in range(imagen.width())
+        for y in range(imagen.height())
+    }
+
+    assert indicador.color_del_estado() in colores

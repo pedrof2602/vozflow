@@ -8,13 +8,17 @@ si en el escritorio real igual lo roba, es reemplazarlo por una notificación (r
 from collections.abc import Callable
 
 from PySide6.QtCore import QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QPainter, QPaintEvent
+from PySide6.QtGui import QColor, QFont, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import QWidget
 
 from vozflow.dominio.dictado import EstadoDelDictado
 from vozflow.ui.estado import vista_de
 
-_ANCHO, _ALTO, _SEPARACION_DEL_BORDE = 220, 44, 48
+_ANCHO, _ALTO, _SEPARACION_DEL_BORDE = 264, 44, 48
+_CANTIDAD_DE_BARRAS = 9
+_REPOSO = 0.12  # la altura de una barra sin voz, como fracción del espacio disponible
+_FONDO = "#191b1d"  # la píldora es oscura en ambos temas, como la de OpenWhispr
+_TEXTO = "#e8e8e8"
 
 
 class Indicador(QWidget):
@@ -38,6 +42,7 @@ class Indicador(QWidget):
         self.resize(_ANCHO, _ALTO)
         self.texto = ""
         self.nivel = 0.0
+        self._historial = [0.0] * _CANTIDAD_DE_BARRAS
         self._color = QColor("#8a8f98")
         self._ocultar_error = QTimer(self)
         self._ocultar_error.setSingleShot(True)
@@ -54,6 +59,7 @@ class Indicador(QWidget):
             return
         if estado is EstadoDelDictado.ESCUCHANDO:
             self.nivel = 0.0
+            self._historial = [0.0] * _CANTIDAD_DE_BARRAS
         if estado is EstadoDelDictado.ERROR:
             self._ocultar_error.start(self._duracion_error_ms)
         self._ubicar()
@@ -62,8 +68,25 @@ class Indicador(QWidget):
 
     def establecer_nivel(self, nivel: float) -> None:
         self.nivel = min(1.0, max(0.0, nivel))
+        self._historial = [*self._historial[1:], self.nivel]
         if self.isVisible():
             self.update()
+
+    def barras(self) -> list[float]:
+        """Alto de cada barra de onda (0 a 1): las más nuevas a la derecha."""
+        return [_REPOSO + (1 - _REPOSO) * nivel for nivel in self._historial]
+
+    def radio_de_esquina(self) -> float:
+        return self.height() / 2
+
+    def color_de_fondo(self) -> str:
+        return _FONDO
+
+    def color_de_texto(self) -> str:
+        return _TEXTO
+
+    def color_del_estado(self) -> str:
+        return self._color.name()
 
     # ---- internos -----------------------------------------------------------------------
 
@@ -76,26 +99,30 @@ class Indicador(QWidget):
     def paintEvent(self, evento: QPaintEvent) -> None:  # noqa: N802 (nombre de Qt)
         pintor = QPainter(self)
         pintor.setRenderHint(QPainter.RenderHint.Antialiasing)
-        fondo = QRectF(0, 0, self.width(), self.height())
-        pintor.setBrush(QColor(24, 26, 31, 225))
-        pintor.setPen(Qt.PenStyle.NoPen)
-        pintor.drawRoundedRect(fondo, 14, 14)
-        pintor.setBrush(self._color)
-        pintor.drawEllipse(QRectF(14, self.height() / 2 - 6, 12, 12))
-        fuente = QFont()
-        fuente.setPixelSize(14)
-        pintor.setFont(fuente)
-        pintor.setPen(QColor("white"))
-        pintor.drawText(
-            QRectF(34, 4, 140, self.height() - 22), Qt.AlignmentFlag.AlignVCenter, self.texto
-        )
-        # barra de nivel
-        pintor.setPen(Qt.PenStyle.NoPen)
-        pintor.setBrush(QColor(255, 255, 255, 40))
-        pista = QRectF(34, self.height() - 14, self.width() - 48, 5)
-        pintor.drawRoundedRect(pista, 2.5, 2.5)
-        pintor.setBrush(self._color)
+        pintor.setBrush(QColor(_FONDO))
+        pintor.setPen(QPen(QColor("#383b3e"), 1))
         pintor.drawRoundedRect(
-            QRectF(pista.x(), pista.y(), pista.width() * self.nivel, 5), 2.5, 2.5
+            QRectF(0.5, 0.5, self.width() - 1, self.height() - 1),
+            self.radio_de_esquina(),
+            self.radio_de_esquina(),
+        )
+        # barras de onda
+        pintor.setPen(Qt.PenStyle.NoPen)
+        pintor.setBrush(self._color)
+        ancho_barra, hueco, x = 3.0, 3.0, 20.0
+        maximo = self.height() - 18
+        for alto in self.barras():
+            h = max(4.0, alto * maximo)
+            pintor.drawRoundedRect(QRectF(x, (self.height() - h) / 2, ancho_barra, h), 1.5, 1.5)
+            x += ancho_barra + hueco
+        fuente = QFont()
+        fuente.setPixelSize(13)
+        pintor.setFont(fuente)
+        pintor.setPen(QColor(_TEXTO))
+        izquierda = x + 10
+        pintor.drawText(
+            QRectF(izquierda, 0, self.width() - izquierda - 16, self.height()),
+            int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+            self.texto,
         )
         pintor.end()

@@ -286,3 +286,20 @@ def test_las_paginas_reales_quedan_agrupadas_como_en_la_guia(qtbot: QtBot, tmp_p
         "INICIO", "TEXTO", "DICTADO", "INTELIGENCIA ARTIFICIAL", "DATOS",
     ]  # fmt: skip
     assert all(not b.icon().isNull() for b in ventana.botones_de_navegacion())
+
+
+def test_al_cambiar_el_tema_los_iconos_de_la_barra_se_vuelven_a_teñir(qtbot: QtBot) -> None:
+    from vozflow.ui.tema import CLARA, OSCURA, establecer_paleta
+
+    establecer_paleta(OSCURA)
+    paginas: dict[str, QWidget] = {"Teclas": QLabel("t")}
+    ventana = VentanaAjustes(paginas)
+    qtbot.addWidget(ventana)
+    antes = ventana.botones_de_navegacion()[0].icon().pixmap(18, 18).toImage()
+
+    establecer_paleta(CLARA)
+    ventana.actualizar_iconos()
+
+    despues = ventana.botones_de_navegacion()[0].icon().pixmap(18, 18).toImage()
+    assert antes != despues
+    establecer_paleta(OSCURA)

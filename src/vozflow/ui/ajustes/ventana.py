@@ -42,6 +42,7 @@ from vozflow.ui.ajustes.teclas import PaginaTeclas
 from vozflow.ui.ajustes.vocabulario import PaginaVocabulario
 from vozflow.ui.estado import VistaDeEstado, vista_de
 from vozflow.ui.iconos_de_linea import icono
+from vozflow.ui.logo import logo
 from vozflow.ui.tema import paleta_actual
 
 _ESPERA_PARA_SOLTAR_EL_FOCO_MS = 400
@@ -132,6 +133,7 @@ class VentanaAjustes(QMainWindow):
     ) -> None:
         super().__init__()
         self.setWindowTitle("vozflow — Ajustes")
+        self.setWindowIcon(logo())
         self.resize(960, 640)
         self._ocultar_al_cerrar = ocultar_al_cerrar
         self._espera_ms = espera_ms
@@ -263,6 +265,13 @@ class VentanaAjustes(QMainWindow):
         self._reconstruir_barra()
         if actual:
             self._elegir(actual)
+
+    def actualizar_iconos(self) -> None:
+        """Vuelve a teñir los íconos de la barra con la paleta en uso."""
+        for nombre, boton in self._botones.items():
+            boton.setIcon(
+                icono(_ICONOS_POR_PAGINA.get(nombre, "ajustes"), paleta_actual().texto_atenuado, 18)
+            )
 
     def nombres_de_paginas(self) -> list[str]:
         return list(self._orden)

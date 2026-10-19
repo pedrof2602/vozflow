@@ -29,12 +29,18 @@ from vozflow.reescritura import ReescrituraDeBase
 from vozflow.ui.ajustes.ventana import ContextoDeAjustes
 from vozflow.ui.aplicacion_grafica import InterfazGrafica
 from vozflow.ui.arranque import InstanciaUnica
+from vozflow.ui.aspecto import Aspecto, esquema_del_sistema
 
 _registro = logging.getLogger(__name__)
 
 
 def _directorio_del_candado() -> Path:
     return Path(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir())
+
+
+def _directorio_del_tema() -> Path:
+    base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    return base / "vozflow" / "tema"
 
 
 class _Controlador:
@@ -56,6 +62,9 @@ def arrancar_interfaz(
     app = QApplication(sys.argv[:1])
     app.setApplicationName("vozflow")
     app.setQuitOnLastWindowClosed(False)  # vive en la bandeja
+    aspecto = Aspecto(app, _directorio_del_tema())
+    aspecto.aplicar(esquema_del_sistema(app))
+    aspecto.seguir_al_sistema()
     instancia = InstanciaUnica("vozflow", _directorio_del_candado())
     if not instancia.obtener():
         instancia.avisar_a_la_primera()
@@ -117,6 +126,7 @@ def arrancar_interfaz(
             nivel=lambda: float(getattr(grabadora, "nivel", 0.0)),
             destino_de_traduccion=lambda: aplicacion.idioma_en_curso,
         )
+        aspecto.al_cambiar(lambda _: interfaz.ventana.actualizar_iconos())
         instancia.pedido_de_mostrar.connect(lambda: interfaz.mostrar_ajustes("Teclas"))
         reloj_de_senales = _atender_ctrl_c(interfaz.salir)  # que no se libere mientras corre Qt
         interfaz.mostrar_al_arrancar()
