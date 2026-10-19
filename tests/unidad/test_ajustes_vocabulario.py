@@ -157,3 +157,15 @@ def test_muestra_lo_que_ya_estaba_guardado(qtbot: QtBot) -> None:
     qtbot.addWidget(pagina)
 
     assert pagina.lista_palabras.count() == 1 and pagina.lista_atajos.count() == 1
+
+
+def test_los_botones_no_se_estiran_a_todo_el_ancho(qtbot: QtBot) -> None:
+    from PySide6.QtWidgets import QPushButton
+
+    pagina, _, _ = _pagina(qtbot)
+    pagina.resize(800, 700)
+    pagina.show()
+
+    botones = pagina.findChildren(QPushButton)
+
+    assert botones and all(b.width() < pagina.width() / 2 for b in botones)

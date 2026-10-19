@@ -374,3 +374,11 @@ def test_cada_tecla_lleva_su_titulo_y_su_ayuda_en_lenguaje_llano(qtbot: QtBot) -
 
 def test_estan_las_claves_para_el_inventario() -> None:
     assert PaginaTeclas.CLAVES == ("atajo.alternar", "atajo.traducir")
+
+
+def test_el_boton_aplicar_no_se_estira_a_todo_el_ancho(qtbot: QtBot) -> None:
+    pagina, _, _ = _pagina(qtbot)
+    pagina.resize(700, 500)
+    pagina.show()
+
+    assert pagina.boton_aplicar.width() < pagina.width() / 2

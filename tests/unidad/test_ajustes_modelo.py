@@ -121,3 +121,10 @@ def test_con_los_valores_de_fabrica_no_hay_restablecer(qtbot: QtBot) -> None:
 
 def test_estan_las_claves_para_el_inventario() -> None:
     assert PaginaModelo.CLAVES == ("motor.modelo", "motor.hilos")
+
+
+def test_el_boton_guardar_no_se_estira_a_todo_el_ancho(qtbot: QtBot) -> None:
+    pagina, _ = _pagina(qtbot)
+    pagina.resize(700, 400)
+
+    assert pagina.boton_guardar.width() < pagina.width() / 2

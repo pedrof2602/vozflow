@@ -4,7 +4,7 @@ Lo técnico que quedó de la antigua página de audio; el micrófono, el idioma 
 «Dictado». Aquí sí hay «Guardar»: el modelo es un texto que hay que validar.
 """
 
-from PySide6.QtWidgets import QLineEdit, QPushButton, QSpinBox, QVBoxLayout
+from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QSpinBox, QVBoxLayout
 
 from vozflow.persistencia.ajustes import AjustesRepo
 from vozflow.persistencia.errores import DatoInvalido
@@ -22,9 +22,9 @@ class PaginaModelo(PaginaBase):
         self.campo_modelo = QLineEdit()
         self.spin_hilos = QSpinBox()
         self.spin_hilos.setRange(1, 8)
-        guardar = QPushButton("Guardar")
-        guardar.setProperty("principal", True)
-        guardar.clicked.connect(lambda _=False: self.guardar())
+        self.boton_guardar = QPushButton("Guardar")
+        self.boton_guardar.setProperty("principal", True)
+        self.boton_guardar.clicked.connect(lambda _=False: self.guardar())
         self.filas = {
             "motor.modelo": self._fila("motor.modelo", self.campo_modelo),
             "motor.hilos": self._fila("motor.hilos", self.spin_hilos),
@@ -32,7 +32,10 @@ class PaginaModelo(PaginaBase):
         columna = QVBoxLayout(self)
         for fila in self.filas.values():
             columna.addWidget(fila)
-        columna.addWidget(guardar)
+        fila_del_boton = QHBoxLayout()
+        fila_del_boton.addWidget(self.boton_guardar)
+        fila_del_boton.addStretch()
+        columna.addLayout(fila_del_boton)
         columna.addWidget(self._etiqueta_mensaje)
         columna.addStretch()
         self.recargar()

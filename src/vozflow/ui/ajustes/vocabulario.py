@@ -3,6 +3,7 @@
 from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLineEdit,
     QListWidget,
     QPlainTextEdit,
@@ -16,6 +17,15 @@ from vozflow.persistencia.errores import DatoInvalido
 from vozflow.ui.ajustes.base import PaginaBase
 
 _MAXIMO_DE_PALABRA, _MAXIMO_DE_DISPARADOR = 80, 100
+
+
+def _en_una_fila(*botones: QPushButton) -> QHBoxLayout:
+    """Los botones a su tamaño natural, uno al lado del otro, sin estirarse por toda la página."""
+    fila = QHBoxLayout()
+    for boton in botones:
+        fila.addWidget(boton)
+    fila.addStretch()
+    return fila
 
 
 class PaginaVocabulario(PaginaBase):
@@ -50,8 +60,7 @@ class PaginaVocabulario(PaginaBase):
         agregar.clicked.connect(lambda _=False: self.agregar_palabra())
         borrar = QPushButton("Borrar la seleccionada")
         borrar.clicked.connect(lambda _=False: self.borrar_palabra())
-        formulario.addRow(agregar)
-        formulario.addRow(borrar)
+        formulario.addRow(_en_una_fila(agregar, borrar))
 
         atajos_caja = QGroupBox("Atajos de texto")
         formulario_atajos = QFormLayout(atajos_caja)
@@ -63,8 +72,7 @@ class PaginaVocabulario(PaginaBase):
         agregar_atajo.clicked.connect(lambda _=False: self.agregar_atajo())
         borrar_atajo = QPushButton("Borrar el seleccionado")
         borrar_atajo.clicked.connect(lambda _=False: self.borrar_atajo())
-        formulario_atajos.addRow(agregar_atajo)
-        formulario_atajos.addRow(borrar_atajo)
+        formulario_atajos.addRow(_en_una_fila(agregar_atajo, borrar_atajo))
 
         columna = QVBoxLayout(self)
         columna.addWidget(diccionario_caja)

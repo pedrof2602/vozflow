@@ -4,7 +4,7 @@ from collections.abc import Callable, Mapping
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent, QKeySequence
-from PySide6.QtWidgets import QLineEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from vozflow.atajos.compuesta import NingunAdaptadorSirve
 from vozflow.atajos.evdev import SinPermisoDeTeclado, SinTeclados
@@ -166,9 +166,9 @@ class PaginaTeclas(PaginaBase):
         self._teclas = {"alternar": FilaDeTeclas(), "traducir": FilaDeTeclas()}
         self.campo_alternar.atajo_mostrado.connect(self._teclas["alternar"].establecer)
         self.campo_traducir.atajo_mostrado.connect(self._teclas["traducir"].establecer)
-        aplicar = QPushButton("Aplicar")
-        aplicar.setProperty("principal", True)
-        aplicar.clicked.connect(lambda _=False: self.aplicar())
+        self.boton_aplicar = QPushButton("Aplicar")
+        self.boton_aplicar.setProperty("principal", True)
+        self.boton_aplicar.clicked.connect(lambda _=False: self.aplicar())
         self.filas = {
             "atajo.alternar": self._fila("atajo.alternar", self.campo_alternar, "alternar"),
             "atajo.traducir": self._fila("atajo.traducir", self.campo_traducir, "traducir"),
@@ -176,7 +176,10 @@ class PaginaTeclas(PaginaBase):
         columna = QVBoxLayout(self)
         for fila in self.filas.values():
             columna.addWidget(fila)
-        columna.addWidget(aplicar)
+        fila_del_boton = QHBoxLayout()
+        fila_del_boton.addWidget(self.boton_aplicar)
+        fila_del_boton.addStretch()
+        columna.addLayout(fila_del_boton)
         columna.addWidget(self._etiqueta_mensaje)
         columna.addStretch()
         self._mostrar_actuales()
